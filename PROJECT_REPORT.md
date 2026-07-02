@@ -6,6 +6,17 @@
 
 ---
 
+## 0. Current status (as of 2026-07-02, latest check)
+
+- **Orchestrator:** running at `http://localhost:4000`, `ready: true`.
+- **Dashboard:** running at `http://localhost:5173`.
+- **Live contract:** `CDPFNNPOXFZLFZOJRUN6PW7LYWOIU6SLFBJZKP3BUC6YMOUIL6XB6MF6` (same instance since §4.2's deployment — has stayed up across the whole UI-overhaul and hero-section work below).
+- **Live totals right now** (`GET /api/summary`): **16 settled, 15 rejected, 0 violations reached settlement, 31 total** — higher than §4.2's original 9/3/12 because of the additional real payments triggered while verifying the dashboard changes in §3.5 and §3.6.
+- **Code status:** all 6 dashboard UI-overhaul tasks (§3.5) plus the hero-section visual port (§3.6) are complete and verified live. No known open bugs. Remaining items are the disclosed roadmap gaps in §8, not defects.
+- To run everything from scratch instead of using the already-running instance, see §9.
+
+---
+
 ## 1. What this is
 
 Stellar's **x402** and **MPP (Machine Payment Protocol)** now let AI agents autonomously discover, authorize, and settle payments for APIs, data, and compute — no human approves each transaction. That's live infrastructure, not a demo concept. But Stellar is a public ledger: every one of those payments — who an agent paid, how much, how often — is visible to anyone watching. For a company running a fleet of agents with department budgets and vendor relationships embedded in that spend pattern, the public spend graph is a competitive-intelligence leak. And today's spending controls (caps, allow-lists) are enforced by a contract anyone can inspect but no one can *prove* was configured correctly, or wasn't tampered with, without being handed the whole ledger.
@@ -71,6 +82,7 @@ Every arrow above is a real network call except the bottom one (x402/MPP facilit
 | `dashboard/` | Vite/React frontend, 5 screens, Playwright e2e smoke test |
 | `deploy/` | Standalone shell scripts for manual contract inspection/deployment |
 | `docs/shadow.md` | The original hackathon PRD (pre-rename, "Umbra") |
+| `agent-hero-section/` | Standalone Next.js/Tailwind/shadcn scaffold, a design reference only (§3.6) — its hero visual was ported into `dashboard/`, this folder itself is not run or deployed |
 
 ---
 
@@ -113,6 +125,29 @@ Given two real commitment snapshots (a period-start commitment and the agent's c
 ### 3.5 The dashboard (`dashboard/src/`)
 
 Five screens (landing, console, live feed, vendors, attestation) over the orchestrator's REST+SSE API. The Live Sealed Feed never renders a plaintext amount — settled payments show `●●●●●●`; a rejected payment's vendor *is* shown, since a rejected payment never spent anything and naming it is audit-useful rather than a confidentiality leak.
+
+**UI overhaul (2026-07-02, post-launch).** After the initial build and audit (§4–§7 below), the dashboard went through a six-part animation/polish pass, each part verified live against the real running orchestrator and contract (screenshots, real triggered payments/proofs/vendor changes, not just code review) before moving to the next:
+
+1. **Live Sealed Feed** — rows now slide in from the right (`translateX(24px)→0`, 220ms), hold sealed (`●●●●●●`) for exactly 900ms, then reveal with a border-color transition (150ms) and a fading-in pill badge (`✓ Policy proof verified on-chain` / `✗ Proof rejected — over per-tx cap` / `— vendor not in allow-list`) carrying a real `view tx →` link. Counters count up over 100ms via a shared `AnimatedNumber` component. Added a pulsing "● LIVE" indicator and live-ticking relative timestamps.
+2. **Landing page** — rebuilt hero copy, added a distinct `#0a0e1a` hero background block, three "how it works" cards with hand-drawn SVG icons (shield-lock, check, file-certificate) and blue left-border accents, and wired the hero stat row to the same count-up component.
+3. **Treasury Console drawer** — added the missing slide-in animation (`translateX(100%)→0`, 250ms — it previously appeared instantly), role-colored badges (Procurement=blue, DevOps=teal, Analytics=purple, Marketing=amber, Compliance=gray, via a shared `roleColorClass()` helper), an agent-ID copy button, and converted the console's agent rows into real hoverable cards with a chevron affordance.
+4. **Vendors screen** — added a crossfading Merkle-root display (400ms), a 2-second "Updated" badge, real sliding toggle switches (replacing plain Remove/Re-add buttons) wired to the same live `update_policy` calls, red-border "Removed" state, and pop-in animation for newly added vendor cards.
+5. **Compliance Attestation** — card now has its own rise-in animation (`translateY(16px)→0`, 300ms), header reads "Aegis Fleet · [period]", the verification tx line reads "view on stellar.expert →", copy-link now fires a real floating toast, and the "Verify independently" `stellar-cli` command block is now genuinely collapsible (was previously always expanded).
+6. **Global polish** — added a route-change fade (200ms) between tabs, unified all status/allow-list badges to one pill spec (11px, 20px radius, 4px/10px padding), added hover-to-blue transitions to every card type, and replaced the last raw black/near-black hex literals (`#06140e`, `#0a0e1a`, `#000000a0`, `#000000cc`) with named CSS custom properties.
+
+**A real, pre-existing mobile bug was found and fixed during the polish pass, not introduced by it:** at a 390px viewport, the topbar's four tabs overflowed the page width on every screen except the landing page (which has its own separate nav markup), causing horizontal scroll and wrapped, squished tab labels; agent rows on the console also crammed into an unreadable single line instead of stacking. Both confirmed via screenshot before the fix and after: the tab bar now scrolls horizontally on narrow screens, agent rows stack vertically below 480px, and the vendor grid drops to a single column below 480px.
+
+Design-direction note: the polish pass explicitly kept the dashboard's existing all-dark theme (`:root { color-scheme: dark }`, green/purple/blue accents) rather than introducing a light-mode-primary look, since that's what every screen was already built around.
+
+### 3.6 Hero-section visual port (2026-07-02, same day, after the overhaul)
+
+A separate, standalone Next.js/Tailwind/shadcn scaffold (`agent-hero-section/`, a v0.dev-generated preview app for one generic "AI Personal Assistant" hero component) was provided as a design reference. Its layout and animated visual were ported into the real dashboard's landing page — the scaffold itself was left untouched, and no Tailwind/shadcn/Next.js dependency was pulled into the Vite app.
+
+- Added `dashboard/src/HeroOrb.tsx`, wrapping the real `@paper-design/shaders-react` `PulsingBorder` WebGL shader (a new production dependency), recolored from the template's generic purple/pink/red to Aegis's actual accent tokens (`--accent` green, `--accent-2` purple, `--pending` blue, `--role-teal`).
+- Rebuilt `LandingPage.tsx`'s hero into a two-column grid: left keeps the existing headline/subhead/CTAs/stat-row, plus a new fact row that replaced the template's generic "Available 24/7 · No setup required · Enterprise ready" with three claims that are actually true of this project — **Real UltraHonk proofs · No plaintext amounts, ever · Stellar Protocol 26 (CAP-80)**. Right side is the animated glow orb with a `"shielded balance commitment"` caption and three recolored floating accent dots. Verified responsive: the orb reorders above the text on mobile (`order: -1` below 860px).
+- **Two real bugs hit during integration, both fixed and verified, not left open:**
+  1. Right after `npm install`, the orb crashed with a React "Invalid hook call" — the already-running Vite dev server had a stale `node_modules/.vite` dependency-optimization cache from before the new package existed. Fixed by clearing the cache and restarting the dev server.
+  2. The template's code passed a prop called `spotsPerColor`, which doesn't exist in this package's actual API (confirmed against its real `.d.ts` and source — the real prop is `spots`). Because it wasn't a recognized prop, it fell through to `...rest` and got spread onto the underlying DOM canvas element, triggering a React warning that failed the e2e suite's "no console errors" check. Fixed by using the correct prop name (`spots={5}`); suite back to 12/12 clean.
 
 ---
 
@@ -208,7 +243,7 @@ Lower-priority gaps identified, worth adding in a follow-up pass:
 4. Per-agent (not treasury-wide) per-transaction caps — needs a small circuit extension to carry a per-agent cap as a public input bound to `agent_id`.
 5. Batched/parallel proof generation across agents — currently serialized per circuit to avoid clobbering shared `target/` build artifacts (the main bottleneck in a multi-payment demo run).
 6. A fuller Playwright e2e suite covering real proof-generation and attestation-generation paths end to end, not just navigation/rendered-data assertions.
-7. Mobile-responsive dashboard layout — confirmed only 2 `@media` queries total across the dashboard's CSS.
+7. ~~Mobile-responsive dashboard layout~~ — addressed in the 2026-07-02 UI overhaul (§3.5): a real horizontal-overflow bug in the topbar (tabs wider than a 390px viewport) and non-stacking agent rows were found and fixed, with a proper `max-width: 480px` breakpoint added. Not exhaustively tested on physical devices, but verified via emulated-viewport screenshots on all 4 app-shell screens plus the landing page.
 8. The five test cases listed in §7.
 
 Items 2–7 above are exactly what the README's own "What we'd build next" section already discloses — nothing new was found beyond item 1 and the test gaps in §7.
@@ -217,24 +252,36 @@ Items 2–7 above are exactly what the README's own "What we'd build next" secti
 
 ## 9. How to run it locally
 
-Requires **WSL (Ubuntu)** for the Noir/Barretenberg/Stellar toolchain; the orchestrator/dashboard run natively on Windows via `npm` and shell out to WSL automatically.
+> **As of this report, both servers are already running** (§0) — if you're on this same machine/session, just open `http://localhost:5173`. The steps below are for a clean run from scratch (e.g., after a reboot).
+
+Requires **WSL (Ubuntu)** for the Noir/Barretenberg/Stellar toolchain; the orchestrator/dashboard run natively on Windows via `npm` and shell out to WSL automatically — confirmed installed at `~/.nargo/bin`, `~/.bb087/bin`, `~/.local/bin/stellar` inside WSL.
 
 ```bash
-# Circuits + contract
+# 1. (Optional) Circuits + contract test suites
 cd aegis-circuit && nargo test
 cd ../aegis-attestation-circuit && nargo test
 cd ../aegis-contract && cargo test
 
-# Orchestrator (builds + deploys a fresh contract to Testnet, ~1-3 min)
-cd orchestrator && npm install && npm run start   # http://localhost:4000
+# 2. Orchestrator (builds + deploys a FRESH contract to Testnet, ~1-3 min,
+#    real transactions -- use `npm run start`, not `npm run dev`, which
+#    redeploys the whole contract on every file save)
+cd ../orchestrator && npm install && npm run start   # http://localhost:4000
+# wait for "Bootstrap complete" in the log, or poll GET /api/status for ready:true
+
+# 3. In a second terminal, seed the roster (orchestrator still running)
+cd orchestrator
 npm run seed                                       # registers the 5-agent / 8-vendor roster
-npm run demo                                       # plays the 12-payment demo scenario
+npm run demo                                       # optional: plays the 12-payment demo scenario
 npm run selftest                                   # Poseidon/Merkle cross-check
 
-# Dashboard
+# 4. In a third terminal, the dashboard
 cd dashboard && npm install && npm run dev         # http://localhost:5173
 npm run test:e2e                                   # real Playwright smoke test
 ```
+
+Then open `http://localhost:5173/` — `/console`, `/feed`, `/vendors`, `/attestation` are the four app screens behind the landing page.
+
+**To stop:** `Ctrl+C` in each terminal, or on Windows find the PID with `Get-NetTCPConnection -LocalPort 4000` / `5173` in PowerShell and `Stop-Process -Id <pid> -Force`.
 
 Full toolchain install instructions (Noir 1.0.0-beta.9, Barretenberg v0.87.0, Stellar CLI v27.0.0, `jq`) are in the top-level `README.md`.
 
@@ -272,3 +319,7 @@ Point at `aegis-circuit/src/main.nr` — the constraints are `assert()` statemen
 ## 11. Bottom line
 
 Every claim in the README that was checkable was verified true by actually running the code, not just reading it: all five test suites pass, the live demo behaves exactly as documented on a freshly deployed Testnet contract, and no undisclosed mocks, placeholders, hardcoded data, or verification bypasses exist anywhere in the codebase. The only gaps are the ones the project already discloses as future work, plus a placeholder screenshot line in the README and five additional test cases worth writing. One of those gaps — replay-attack coverage against a real proof — was closed during this audit.
+
+**Post-audit update (2026-07-02):** the dashboard went through a six-part UI/animation overhaul (§3.5) covering the live feed, landing page, treasury console drawer, vendors screen, attestation card, and a global polish pass. Every change was verified live against the real running orchestrator and Testnet contract — real triggered payments, real vendor allow-list updates, real generated attestation proofs, screenshotted before and after — not just reviewed as code. The pass also caught and fixed a real, pre-existing mobile layout bug (topbar overflow at 390px) that predated this work.
+
+**Same-day follow-up:** the landing page's hero was further upgraded by porting a provided design reference (§3.6) — a real animated WebGL shader visual, recolored to the project's own palette and paired with three accurate (not marketing-fluff) claims about what the system does. Two real integration bugs (a stale build cache, an incorrect upstream prop name) were found and fixed in the process, both confirmed via a clean e2e run afterward. As of this update, both the orchestrator and dashboard are live and running (§0), with real Testnet activity (16 settled / 15 rejected / 0 reached settlement) accumulated over the course of this session's verification work.
