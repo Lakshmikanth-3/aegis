@@ -1,0 +1,8 @@
+[package]
+name = "aegis_attestation_circuit"
+type = "bin"
+authors = [""]
+compiler_version = ">=0.22.0"
+
+[dependencies]
+poseidon = { tag = "v0.2.0", git = "https://github.com/noir-lang/poseidon" }

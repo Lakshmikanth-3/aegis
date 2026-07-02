@@ -1,0 +1,22 @@
+[package]
+name = "aegis-treasury"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+soroban-sdk = { version = "26.0.1", features = ["alloc"] }
+ultrahonk_soroban_verifier = { path = "../rs-soroban-ultrahonk/crates/ultrahonk-soroban-verifier", default-features = false }
+
+[dev-dependencies]
+soroban-sdk = { version = "26.0.1", features = ["testutils", "alloc"] }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+overflow-checks = true

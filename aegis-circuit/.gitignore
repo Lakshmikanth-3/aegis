@@ -1,0 +1,5 @@
+# Keep target/proof, target/vk, target/public_inputs -- aegis-contract's
+# tests/real_proof.rs include_bytes!s them as committed fixtures, so the
+# contract's tests run without needing the WSL nargo/bb toolchain.
+target/*.json
+target/*.gz

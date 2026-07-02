@@ -1,0 +1,36 @@
+# Secrets / local env
+.env
+.env.*
+!.env.example
+
+# Dependencies / build artifacts (per-project .gitignore files also cover
+# these locally, this is a repo-wide safety net)
+node_modules/
+target/
+dist/
+dist-ssr/
+debug/
+test_snapshots/
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Local Claude Code session settings (not project config)
+.claude/

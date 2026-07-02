@@ -1,0 +1,95 @@
+:root {
+  color-scheme: dark;
+  --bg: #07080a;
+  --bg-elev: #0c0e11;
+  --panel: #12141880;
+  --panel-solid: #131519;
+  --panel-border: #23262dcc;
+  --panel-border-soft: #ffffff14;
+  --text: #eef0f3;
+  --text-dim: #8b909a;
+  --text-faint: #5a5f68;
+  --display: "Space Grotesk", "SFMono-Regular", sans-serif;
+  --mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --sans: "Space Grotesk", -apple-system, "Segoe UI", Inter, sans-serif;
+  --accent: #2fe6a0;
+  --accent-soft: #2fe6a022;
+  --accent-2: #7c5cff;
+  --danger: #ff5d5d;
+  --pending: #5d7bff;
+  --radius: 14px;
+  --glow: 0 0 0 1px var(--panel-border-soft), 0 8px 30px -10px #00000080;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  letter-spacing: -0.01em;
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+a {
+  color: inherit;
+}
+
+/* Reusable glow-mesh background, used behind the landing hero and as a
+   faint ambient backdrop for the app shell. Pure CSS radial gradients,
+   no canvas/particle library needed. */
+.glow-mesh {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(600px circle at 15% 10%, #2fe6a01f, transparent 60%),
+    radial-gradient(700px circle at 85% 0%, #7c5cff22, transparent 55%),
+    radial-gradient(900px circle at 50% 100%, #2fe6a012, transparent 60%);
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

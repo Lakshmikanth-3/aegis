@@ -1,0 +1,274 @@
+# Aegis — Complete Project Report (A–Z)
+
+*Confidential, provably-compliant treasury rails for AI agent payments on Stellar.*
+
+> **Report generated:** 2026-07-02, by auditing the codebase end-to-end, actually executing every test suite and the live demo scenario against a freshly deployed Stellar Testnet contract, and independently grepping for mocked/placeholder/hardcoded logic. Every number, transaction hash, and contract ID below is from a real run performed for this report, not copied from documentation.
+
+---
+
+## 1. What this is
+
+Stellar's **x402** and **MPP (Machine Payment Protocol)** now let AI agents autonomously discover, authorize, and settle payments for APIs, data, and compute — no human approves each transaction. That's live infrastructure, not a demo concept. But Stellar is a public ledger: every one of those payments — who an agent paid, how much, how often — is visible to anyone watching. For a company running a fleet of agents with department budgets and vendor relationships embedded in that spend pattern, the public spend graph is a competitive-intelligence leak. And today's spending controls (caps, allow-lists) are enforced by a contract anyone can inspect but no one can *prove* was configured correctly, or wasn't tampered with, without being handed the whole ledger.
+
+**Aegis closes both gaps with one circuit.** Each agent draws from a shielded balance commitment instead of a visible running balance. Every spend is gated by a real Noir/UltraHonk zero-knowledge proof that checks the payment against policy — per-transaction cap, vendor allow-list, sufficient remaining balance — *before* the contract will let it settle. A non-compliant payment doesn't get rejected by an application-level check; it simply has no valid proof, because the circuit's constraints can't be satisfied. At any time, a treasury operator can generate a second, much smaller proof that discloses only an aggregate compliance fact — *"this agent's spend over the last 24 hours stayed under $X, with zero payments to non-allow-listed vendors"* — without disclosing a single underlying transaction.
+
+### Origin
+
+The project began as a hackathon PRD (`docs/shadow.md`), originally named **Umbra**, written for the "Stellar Hacks: Real-World ZK" DoraHacks event (submission deadline June 29, 2026, ~3-day build window). It shipped as **Aegis**, and — unusually for a hackathon MVP — both the "must ship" scope *and* both stretch goals (the attestation circuit, live Testnet deployment) were completed, not just the MVP.
+
+---
+
+## 2. Architecture
+
+```
+                          ┌──────────────────────┐
+   AI Agent  ── wants to ─▶  Orchestrator          │
+   (agent_id, vendor,      │  - real Poseidon math │
+    amount)                │  - real nargo/bb       │
+                           │    proof generation    │
+                           └──────────┬────────────┘
+                                      │ real nargo execute + bb prove
+                                      │ (rejects here if no witness solves)
+                                      ▼
+                           ┌───────────────────────┐
+                           │  AegisTreasury          │
+                           │  (Soroban, Testnet)     │
+                           │  - UltraHonk verifier    │
+                           │    (CAP-80 BN254 fns)   │
+                           │  - commitment + nonce    │
+                           │    state per agent      │
+                           │  - vendor allow-list     │
+                           │    Merkle root          │
+                           └──────────┬────────────┘
+                                      │ AuthorizedSpendEvent
+                                      ▼
+                           ┌───────────────────────┐
+                           │  x402 / MPP Facilitator │
+                           │  (logged, not executed  │
+                           │   in this build)        │
+                           └───────────────────────┘
+
+   Dashboard (Vite/React) — talks to the orchestrator's REST + SSE API:
+     /            Landing page (live settled/blocked stat row)
+     /console     Treasury Console + per-agent detail drawer
+     /feed        Live Sealed Feed (sealed amounts, real-time SSE)
+     /vendors     Vendor allow-list management (real Merkle root updates)
+     /attestation Compliance Attestation (24h / 7d / session, QR + independent verify)
+```
+
+Every arrow above is a real network call except the bottom one (x402/MPP facilitator), which is an explicitly disclosed out-of-scope boundary (see §5).
+
+### Repository layout
+
+| Path | What it is |
+|---|---|
+| `aegis-circuit/` | Noir circuit `spend_proof` — the per-payment compliance proof |
+| `aegis-attestation-circuit/` | Noir circuit `compliance_attestation` — the aggregate disclosure proof |
+| `aegis-contract/` | Soroban/Rust contract `AegisTreasury` — on-chain verifier + policy state |
+| `rs-soroban-ultrahonk/` | Vendored third-party UltraHonk verifier library the contract builds on |
+| `poseidon_src/` | Vendored Poseidon hash Noir library used by both circuits |
+| `orchestrator/` | Node/TypeScript service: Poseidon math, `nargo`/`bb` proof generation via WSL, `stellar-cli` submission, REST+SSE API |
+| `dashboard/` | Vite/React frontend, 5 screens, Playwright e2e smoke test |
+| `deploy/` | Standalone shell scripts for manual contract inspection/deployment |
+| `docs/shadow.md` | The original hackathon PRD (pre-rename, "Umbra") |
+
+---
+
+## 3. How it works, technically
+
+### 3.1 The `spend_proof` circuit (`aegis-circuit/src/main.nr`)
+
+**Public inputs:** `old_balance_commitment`, `new_balance_commitment`, `per_tx_cap`, `vendor_allowlist_root`, `agent_id`, `agent_nonce`
+**Private inputs:** `old_balance`, `blinding_old`, `amount`, `new_balance`, `blinding_new`, `vendor_leaf`, `merkle_path[3]`, `merkle_indices[3]`
+
+Constraints enforced (`main.nr:27–51`):
+1. `Poseidon(old_balance, blinding_old, agent_id) == old_balance_commitment` — proves knowledge of the real current shielded balance.
+2. `old_balance >= amount` and `new_balance == old_balance − amount` — no overspend, no negative balances.
+3. `amount <= per_tx_cap` — the actual per-transaction policy check.
+4. `Poseidon(new_balance, blinding_new, agent_id) == new_balance_commitment` — binds the new commitment for the contract to store.
+5. A depth-3 Poseidon Merkle path proves `vendor_leaf` is a member of `vendor_allowlist_root` (up to 8 vendors), without revealing which leaf.
+
+`agent_nonce` carries no in-circuit arithmetic constraint of its own (`main.nr:46–51`) — replay protection instead comes from the fact that a UltraHonk proof is cryptographically bound to the exact public inputs it was generated against. The contract requires the submitted `agent_nonce` to equal its own stored nonce; once that nonce advances, a captured proof can no longer be replayed with either the old or new nonce value.
+
+### 3.2 The `compliance_attestation` circuit (`aegis-attestation-circuit/src/main.nr`)
+
+Given two real commitment snapshots (a period-start commitment and the agent's current commitment), proves that cumulative spend across that interval is bounded by a claimed cap — without revealing any individual transaction amount.
+
+### 3.3 The `AegisTreasury` contract (`aegis-contract/src/lib.rs`)
+
+- `init` / `register_agent` / `update_policy` — admin-gated setup (vendor allow-list root, per-transaction cap, per-agent starting commitment).
+- `submit_spend(agent_id, proof, public_inputs)` — checks the submitted commitment/nonce/cap/allowlist-root against on-chain state (`lib.rs:246–304`), *then* calls the real UltraHonk verifier; only on both passing does it update the stored commitment and increment the nonce.
+- `set_period_start_commitment` / `verify_attestation` — lets the orchestrator attest against a genuine historical starting point (e.g., "last 24 hours"), not just "since the last click."
+- Built on the vendored `rs-soroban-ultrahonk` crate, using Stellar Protocol 26 ("Yardstick", CAP-80) BN254 host functions for cheap on-chain pairing checks.
+
+### 3.4 The orchestrator (`orchestrator/src/`)
+
+- `poseidon.ts` — off-chain Poseidon commitment/Merkle math, using `poseidon-lite` for speed.
+- `prover.ts` — shells out to WSL to run real `nargo execute` + `bb prove` (`--scheme ultra_honk --oracle_hash keccak`), producing real 14,592-byte proofs and 1,760-byte verification keys.
+- `chain.ts` — shells out to `stellar-cli` (WSL) for all on-chain reads/writes; auto-generates and friendbot-funds a Testnet admin identity on first run.
+- `queue.ts` — serializes all `nargo`/`bb` invocations onto a single FIFO queue, since they share `target/` build artifacts.
+- `treasury.ts` — orchestration layer tying agents, payments, and rejections together; on an unregistered/rejected vendor, constructs a syntactically valid but *wrong* Merkle proof and lets the real circuit reject it, rather than short-circuiting in JavaScript.
+- `selftest.ts` — cross-checks `poseidon-lite`'s output bit-for-bit against real values captured live from `nargo test --show-output` against the actual circuit.
+
+### 3.5 The dashboard (`dashboard/src/`)
+
+Five screens (landing, console, live feed, vendors, attestation) over the orchestrator's REST+SSE API. The Live Sealed Feed never renders a plaintext amount — settled payments show `●●●●●●`; a rejected payment's vendor *is* shown, since a rejected payment never spent anything and naming it is audit-useful rather than a confidentiality leak.
+
+---
+
+## 4. Live verification performed for this report
+
+Every item below was **actually executed**, not read from documentation.
+
+### 4.1 Test suites
+
+| Suite | Command | Result |
+|---|---|---|
+| `spend_proof` circuit | `cd aegis-circuit && nargo test` | **3/3 passing** |
+| `compliance_attestation` circuit | `cd aegis-attestation-circuit && nargo test` | **3/3 passing** |
+| `AegisTreasury` contract | `cd aegis-contract && cargo test` | **18/18 passing** (15 unit + 3 integration against real generated proofs — see §6 for the 18th, added during this audit) |
+| Orchestrator Poseidon/Merkle self-test | `cd orchestrator && npm run selftest` | **14/14 checks passing** |
+| Dashboard Playwright e2e smoke test | `cd dashboard && npm run test:e2e` | **12/12 checks passing** |
+
+### 4.2 Live end-to-end demo run
+
+Deployed a **fresh** `AegisTreasury` instance to Stellar Testnet:
+
+- **Contract:** `CDPFNNPOXFZLFZOJRUN6PW7LYWOIU6SLFBJZKP3BUC6YMOUIL6XB6MF6`
+- **Admin:** `GAJI6KQE5UNOCCNUVUZQIUO3LEEKAIW4GI24UULONY6WN3KIUD63GQTS`
+- Seeded the 5-agent / 8-vendor roster (procurement, devops, analytics, marketing, compliance agents; aws-compute, stripe-payments, twilio-communications, sendgrid-email, cloudflare-cdn, anthropic-api, openai-api, datadog-monitoring vendors).
+- Ran the scripted 12-payment demo scenario. Result: **9 settled, 3 real circuit-level rejections**, exactly as scripted.
+
+Three representative transactions from that run:
+
+| # | Agent → Vendor | Amount | Outcome | Evidence |
+|---|---|---|---|---|
+| 1 | procurement-agent → aws-compute | $340 | **VERIFIED** | tx `41966beba2767da5ba5c463dfe7e90d52de069f1793f3f6934621fb75226deeb` |
+| 6 | procurement-agent → aws-compute | $620 (cap $500) | **REJECTED** (over_cap) | `nargo execute` fails at `main.nr:32` — `assert(amount <= per_tx_cap)` |
+| 8 | analytics-agent → shadowy-data-broker | $300 | **REJECTED** (vendor_not_allowlisted) | `nargo execute` fails at `main.nr:44` — `assert(current_hash == vendor_allowlist_root)` |
+
+All settled-payment transactions are independently verifiable at `stellar.expert/explorer/testnet/tx/<hash>`; both rejections are genuine constraint-solver failures, not application-level `if` checks.
+
+---
+
+## 5. What's real vs. explicitly out of scope
+
+**Real** (verified by this audit, not just claimed):
+- Real Noir/UltraHonk proofs (`nargo` 1.0.0-beta.9 + `bb` v0.87.0), real 14,592-byte proofs, real 1,760-byte verification keys.
+- Real on-chain UltraHonk verification via `rs-soroban-ultrahonk` and Protocol 26 (CAP-80) BN254 host functions.
+- Every rejection shown anywhere is a genuine circuit-level constraint failure (`nargo execute` can't find a witness), including vendor-not-allowlisted cases, where the orchestrator submits a syntactically valid but wrong Merkle proof to the real circuit rather than short-circuiting in JavaScript.
+- Every transaction hash shown is a real Stellar Testnet transaction.
+- The orchestrator's off-chain Poseidon math is cross-verified bit-identical to the real circuit's output (14/14 selftest checks).
+- The dashboard never renders a plaintext settled-payment amount.
+
+**Explicitly out of scope** (a stated cryptographic boundary, not a shortcut):
+- **Live x402/MPP facilitator integration.** The final settlement hop to a vendor's real address is, by construction, the one part of this design that must be publicly visible — like a Tornado-Cash-style privacy pool, deposits/internal transfers are private, a withdrawal to an external address reveals an amount. Aegis hides *which* agent's shielded budget funded a payment and the link between an agent's successive payments — not the literal existence of a real payment rail at the last hop. That hop is logged, not executed against a live facilitator.
+- **CAP-79 muxed sub-account agent identity.** Agent identity is a plain `u64` in this build, not a muxed `M...` sub-address under the treasury's funded `G...` account.
+
+---
+
+## 6. Mock / placeholder / hardcode / bypass audit
+
+A dedicated audit was run (one specialized research pass plus an independent keyword grep across `orchestrator/src`, `dashboard/src`, `aegis-contract/src`, `aegis-circuit/src`, `aegis-attestation-circuit/src` for `TODO|FIXME|HACK|XXX|stub|dummy|placeholder|not implemented|for now|hardcod|bypass|mock|fake|simulate`).
+
+**Result: no undisclosed mocks, stubs, hardcoded proof/transaction data, or verification bypasses found.**
+
+The only matches were legitimate:
+- `dummy_vk()` in `aegis-contract/src/test.rs` — an intentionally-too-short-to-parse verification key, used only in unit tests that check the contract's *rejection* path before a real verifier call is ever reached.
+- `placeholder="..."` — HTML input placeholder attributes in `TreasuryConsole.tsx` / `VendorsScreen.tsx` (normal form UX, not fake data).
+- A comment in `server.ts:20` noting that agents are *no longer* auto-registered with placeholder names (i.e., a past placeholder was already removed).
+
+The two items described in §5 as "explicitly out of scope" are the only places the system deviates from fully real/live behavior, and both are disclosed.
+
+### 6.1 Gap found and fixed during this audit
+
+The contract had unit tests for `NonceMismatch` and `StaleCommitment` individually, but both used a dummy/unparseable verification key — meaning they never actually exercised a real, cryptographically valid proof being replayed. There was **no test proving that a captured real proof can't be resubmitted** to drain funds a second time.
+
+**Fix applied:** extended `aegis-contract/tests/real_proof.rs` so that, after the real 14KB UltraHonk proof settles once, the identical `(agent_id, proof, public_inputs)` is resubmitted and asserted to fail with `Error::StaleCommitment` (the commitment check runs before the nonce check in `submit_spend`'s ordering), with contract state confirmed unchanged. Ran it against the real proof fixtures — passes. Full suite re-run afterward: still 18/18.
+
+---
+
+## 7. Test cases defined but not yet implemented
+
+Lower-priority gaps identified, worth adding in a follow-up pass:
+
+- **Circuit — boundary equality:** `amount == per_tx_cap` should pass (`<=`); currently only over-cap and under-cap paths are tested.
+- **Circuit — balance underflow:** `amount > old_balance` should fail the `old_balance >= amount` assert (`main.nr:30`); not currently exercised.
+- **Contract — cross-agent proof reuse:** agent A's real proof submitted under agent B's `agent_id` should fail, since `agent_id` is baked into the Poseidon commitment — not currently tested.
+- **Orchestrator — concurrency:** simultaneous HTTP payment requests, to verify `queue.ts`'s serialization actually prevents nonce races under load; currently asserted only by design, not tested.
+- **Dashboard e2e:** doesn't yet trigger real proof generation end-to-end (already listed as a known gap in the README's own roadmap).
+
+---
+
+## 8. Remaining steps to consider the project fully complete
+
+1. **README's live-demo section still contains a literal placeholder** — `[screenshot or gif ... placeholder until the demo video is recorded]` — even though real screenshots already exist in `dashboard/screenshots/` (`landing-hero.png`, `app-console-styled.png`, `app-real-feed-styled.png`, `app-attestation-styled.png`, `landing-trust.png`) and are simply not wired into the README.
+2. Live x402/MPP facilitator integration for the final settlement hop (currently logged, not executed).
+3. CAP-79 muxed sub-accounts for per-agent Stellar addresses.
+4. Per-agent (not treasury-wide) per-transaction caps — needs a small circuit extension to carry a per-agent cap as a public input bound to `agent_id`.
+5. Batched/parallel proof generation across agents — currently serialized per circuit to avoid clobbering shared `target/` build artifacts (the main bottleneck in a multi-payment demo run).
+6. A fuller Playwright e2e suite covering real proof-generation and attestation-generation paths end to end, not just navigation/rendered-data assertions.
+7. Mobile-responsive dashboard layout — confirmed only 2 `@media` queries total across the dashboard's CSS.
+8. The five test cases listed in §7.
+
+Items 2–7 above are exactly what the README's own "What we'd build next" section already discloses — nothing new was found beyond item 1 and the test gaps in §7.
+
+---
+
+## 9. How to run it locally
+
+Requires **WSL (Ubuntu)** for the Noir/Barretenberg/Stellar toolchain; the orchestrator/dashboard run natively on Windows via `npm` and shell out to WSL automatically.
+
+```bash
+# Circuits + contract
+cd aegis-circuit && nargo test
+cd ../aegis-attestation-circuit && nargo test
+cd ../aegis-contract && cargo test
+
+# Orchestrator (builds + deploys a fresh contract to Testnet, ~1-3 min)
+cd orchestrator && npm install && npm run start   # http://localhost:4000
+npm run seed                                       # registers the 5-agent / 8-vendor roster
+npm run demo                                       # plays the 12-payment demo scenario
+npm run selftest                                   # Poseidon/Merkle cross-check
+
+# Dashboard
+cd dashboard && npm install && npm run dev         # http://localhost:5173
+npm run test:e2e                                   # real Playwright smoke test
+```
+
+Full toolchain install instructions (Noir 1.0.0-beta.9, Barretenberg v0.87.0, Stellar CLI v27.0.0, `jq`) are in the top-level `README.md`.
+
+---
+
+## 10. Judge-facing explanation (pitch script)
+
+### 30-second version
+*"AI agents on Stellar can now autonomously pay for APIs and compute — that's live infrastructure via x402/MPP, not a demo. But Stellar is a public ledger, so every payment your agent fleet makes is visible to competitors, and today's spending controls are just a contract anyone can inspect but nobody can prove wasn't tampered with. Aegis fixes both: agents spend from a hidden balance, and a real zero-knowledge proof — not an app-level check — is what decides whether a payment is even allowed to happen."*
+
+### Concrete example to show live (from §4.2 above)
+1. **Show a normal payment** — procurement-agent pays aws-compute $340. Real proof generated, real on-chain verification, real settlement tx. Amount never appears in the dashboard.
+2. **Show the over-cap rejection** — same agent tries $620 against a $500 cap. `nargo execute` can't build a witness because `assert(amount <= per_tx_cap)` fails — there's no proof to even submit, so the contract never gets a chance to "reject" anything at the app level.
+3. **Show the vendor-not-allowed rejection** — analytics-agent tries paying an unlisted vendor. The Merkle membership assert fails the same way.
+
+*This is the whole pitch in three transactions: one real settlement with the amount hidden, two real circuit-level refusals — all independently checkable on stellar.expert.*
+
+### The two "wow" moments
+- **Live Sealed Feed:** payments stream in sealed (`●●●●●●`), then a green "✓ Policy proof verified on-chain" tag appears with a real tx link; one event renders red/rejected so judges see enforcement, not a rubber stamp.
+- **Compliance Attestation:** one button, a real ~2-second proof generation, and a shareable QR/link stating an aggregate compliance fact an auditor can independently re-verify without touching Aegis's dashboard or database at all.
+
+### Why it's real ZK, not a rebranded database check
+Point at `aegis-circuit/src/main.nr` — the constraints are `assert()` statements inside a Noir program, compiled to an arithmetic circuit, proved with real Barretenberg, verified on-chain via Stellar's Protocol 26 (CAP-80) BN254 host functions — new infrastructure that specifically exists to make this kind of on-chain proof verification cheap enough to gate a real payment.
+
+### Pre-empt the hardest question
+*"The one thing this can't hide is the final settlement hop to the vendor's real address — like a Tornado-Cash-style privacy pool, deposits and internal transfers are private, a withdrawal to an outside address is necessarily public. We hide which agent funded a payment and the link between an agent's successive payments — not the existence of a real payment rail. That hop is logged, not wired to a live facilitator, in this build."*
+
+### Proof-of-work to hand over if challenged
+- `nargo test` — 3/3 (×2 circuits), real constraint solver.
+- `cargo test` — 18/18, including a real 14KB UltraHonk proof verified on-chain in-process, and a replay-attack test proving a captured real proof can't be resubmitted.
+- The live contract address from §4.2, inspectable by anyone on stellar.expert.
+
+---
+
+## 11. Bottom line
+
+Every claim in the README that was checkable was verified true by actually running the code, not just reading it: all five test suites pass, the live demo behaves exactly as documented on a freshly deployed Testnet contract, and no undisclosed mocks, placeholders, hardcoded data, or verification bypasses exist anywhere in the codebase. The only gaps are the ones the project already discloses as future work, plus a placeholder screenshot line in the README and five additional test cases worth writing. One of those gaps — replay-attack coverage against a real proof — was closed during this audit.
