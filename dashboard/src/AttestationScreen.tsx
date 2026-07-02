@@ -28,6 +28,8 @@ export function AttestationScreen() {
   const [verifyResult, setVerifyResult] = useState<Attestation | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [showCopiedToast, setShowCopiedToast] = useState(false);
+  const [showVerifyCommand, setShowVerifyCommand] = useState(false);
 
   useEffect(() => {
     fetchPolicy().then((p) => {
@@ -56,6 +58,7 @@ export function AttestationScreen() {
     try {
       const result = await generateAttestation(agentId, periodLabel, period);
       setAttestation(result);
+      setShowVerifyCommand(false);
       const verifyUrl = verificationLink(result);
       setQrDataUrl(await QRCode.toDataURL(verifyUrl, { margin: 1, width: 200 }));
     } catch (err) {
@@ -87,13 +90,16 @@ export function AttestationScreen() {
     if (!attestation) return;
     navigator.clipboard.writeText(verificationLink(attestation)).then(() => {
       setLinkCopied(true);
+      setShowCopiedToast(true);
       setTimeout(() => setLinkCopied(false), 1500);
+      setTimeout(() => setShowCopiedToast(false), 1500);
     });
   }
 
   return (
     <div>
       {error && <div className="error-banner">{error}</div>}
+      {showCopiedToast && <div className="toast">Copied!</div>}
 
       <div className="panel">
         <h2>Compliance Attestation</h2>
@@ -152,7 +158,10 @@ export function AttestationScreen() {
       {attestation && (
         <div className="panel attestation-card">
           <div className="attestation-card-body">
-            <div className="attestation-fleet-name">Aegis Fleet · {attestation.agentName}</div>
+            <div className="attestation-fleet-name">Aegis Fleet · {attestation.periodLabel}</div>
+            <div className="attestation-line" style={{ marginBottom: 10 }}>
+              {attestation.agentName} · {PERIOD_OPTIONS.find((o) => o.value === attestation.periodType)?.label}
+            </div>
             <div className="attestation-headline">
               Total spend &le; <span className="mono">${attestation.maxSpendClaim.toLocaleString()}</span>
             </div>
@@ -160,15 +169,14 @@ export function AttestationScreen() {
               <div className="attestation-line">0 payments to non-allow-listed vendors</div>
             )}
             <div className="attestation-line">
-              Period: {PERIOD_OPTIONS.find((o) => o.value === attestation.periodType)?.label} · starting{" "}
-              {new Date(attestation.periodStartTimestamp).toLocaleString()}
+              Starting {new Date(attestation.periodStartTimestamp).toLocaleString()}
               {attestation.periodClamped && " (earliest data available -- no history predates this)"}
             </div>
             {attestation.txHash && attestation.explorerUrl ? (
               <div className="attestation-line">
-                Proof verified on Stellar Testnet ·{" "}
-                <a href={attestation.explorerUrl} target="_blank" rel="noreferrer" className="mono">
-                  {attestation.txHash.slice(0, 12)}…↗
+                Proof verified on Stellar Testnet · <span className="mono">{attestation.txHash.slice(0, 12)}…</span>{" "}
+                <a href={attestation.explorerUrl} target="_blank" rel="noreferrer">
+                  view on stellar.expert →
                 </a>
               </div>
             ) : (
@@ -214,18 +222,26 @@ export function AttestationScreen() {
           <h2>Verify independently</h2>
           <p className="hint">
             Anyone can re-check this attestation was really accepted on Stellar Testnet -- no
-            Aegis dashboard, database, or trust required. Run this with any stellar-cli install:
+            Aegis dashboard, database, or trust required.
           </p>
-          <pre className="verify-command mono">
-            {attestation.txHash
-              ? `stellar tx fetch --hash ${attestation.txHash} --network testnet`
-              : "no on-chain tx recorded for this attestation"}
-          </pre>
-          <p className="hint">
-            This fetches the real transaction that called <code>verify_attestation</code> on
-            contract <span className="mono">{attestation.contractId}</span> and shows its
-            arguments and result directly from the Stellar network.
-          </p>
+          <button className="verify-toggle" onClick={() => setShowVerifyCommand((v) => !v)}>
+            {showVerifyCommand ? "Hide verify command" : "Show verify command"}
+          </button>
+          {showVerifyCommand && (
+            <div className="verify-command-wrap">
+              <p className="hint">Run this with any stellar-cli install:</p>
+              <pre className="verify-command mono">
+                {attestation.txHash
+                  ? `stellar tx fetch --hash ${attestation.txHash} --network testnet`
+                  : "no on-chain tx recorded for this attestation"}
+              </pre>
+              <p className="hint">
+                This fetches the real transaction that called <code>verify_attestation</code> on
+                contract <span className="mono">{attestation.contractId}</span> and shows its
+                arguments and result directly from the Stellar network.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
