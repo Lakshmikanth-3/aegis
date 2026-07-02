@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fetchVendors, updateAllowlist, pay, type VendorCatalog, type VendorEntry } from "./api";
 
 export function VendorsScreen() {
@@ -9,6 +9,7 @@ export function VendorsScreen() {
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [rootJustUpdated, setRootJustUpdated] = useState(false);
+  const [updateBadgeKey, setUpdateBadgeKey] = useState(0);
 
   async function refresh() {
     try {
@@ -42,7 +43,8 @@ export function VendorsScreen() {
 
   async function afterAllowlistChange() {
     setRootJustUpdated(true);
-    setTimeout(() => setRootJustUpdated(false), 900);
+    setUpdateBadgeKey((k) => k + 1);
+    setTimeout(() => setRootJustUpdated(false), 2000);
     reverifyNonMemberStillRejected();
   }
 
@@ -102,8 +104,13 @@ export function VendorsScreen() {
         <h2>Vendor allow-list</h2>
         <p className="hint">Merkle root regenerates automatically when vendors are added or removed.</p>
         <div className={`root-box ${rootJustUpdated ? "updated" : ""}`}>
-          <span className="mono root-box-value">{catalog.allowlistRoot}</span>
+          <CrossfadeRoot value={catalog.allowlistRoot} />
           <div className="root-box-actions">
+            {rootJustUpdated && (
+              <span key={updateBadgeKey} className="root-box-updated-badge">
+                Updated
+              </span>
+            )}
             <button className="ghost small" onClick={copyRoot}>
               {copied ? "Copied ✓" : "Copy"}
             </button>
@@ -121,19 +128,26 @@ export function VendorsScreen() {
               <div className="vendor-card-header">
                 <span className="vendor-card-name">{v.name}</span>
                 {v.active ? (
-                  <span className="badge-green">In allow-list</span>
+                  <span key="active" className="badge-green">In allow-list</span>
                 ) : (
-                  <span className="badge-grey">Not in allow-list</span>
+                  <span key="removed" className="badge-red">Removed</span>
                 )}
               </div>
               <p className="vendor-card-desc">{v.description || "Custom vendor"}</p>
-              <button
-                className={v.active ? "ghost small danger" : "primary small"}
-                disabled={busyVendor === v.name}
-                onClick={() => toggleVendor(v)}
-              >
-                {busyVendor === v.name ? "Updating on-chain…" : v.active ? "Remove" : "Re-add"}
-              </button>
+              <div className="vendor-card-footer">
+                <span className="vendor-card-footer-label">
+                  {busyVendor === v.name ? "Updating on-chain…" : v.active ? "In allow-list" : "Excluded"}
+                </span>
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={v.active}
+                    disabled={busyVendor === v.name}
+                    onChange={() => toggleVendor(v)}
+                  />
+                  <span className="toggle-slider" />
+                </label>
+              </div>
             </div>
           ))}
         </div>
@@ -158,4 +172,25 @@ export function VendorsScreen() {
       </div>
     </div>
   );
+}
+
+/** Crossfades the Merkle root text on change: 200ms fade-out, swap, 200ms
+ * fade-in (400ms total), rather than snapping to the new value instantly. */
+function CrossfadeRoot({ value }: { value: string }) {
+  const [display, setDisplay] = useState(value);
+  const [fading, setFading] = useState(false);
+  const prevRef = useRef(value);
+
+  useEffect(() => {
+    if (prevRef.current === value) return;
+    setFading(true);
+    const t = setTimeout(() => {
+      setDisplay(value);
+      setFading(false);
+      prevRef.current = value;
+    }, 200);
+    return () => clearTimeout(t);
+  }, [value]);
+
+  return <span className={`mono root-box-value ${fading ? "fading" : ""}`}>{display}</span>;
 }
