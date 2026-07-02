@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useEvents } from "./EventsContext";
+import { roleColorClass } from "./roleColors";
 import type { PolicyAgent } from "./api";
 
 interface Props {
@@ -11,10 +13,18 @@ interface Props {
 
 export function AgentDetailDrawer({ agent, vendors, perTxCap, onClose }: Props) {
   const events = useEvents();
+  const [copied, setCopied] = useState(false);
   const agentEvents = events.filter((e) => e.agentId === agent.id);
   const settledCount = agentEvents.filter((e) => e.status === "verified").length;
   const blockedCount = agentEvents.filter((e) => e.status === "rejected").length;
   const recent = [...agentEvents].slice(-5).reverse();
+
+  function copyAgentId() {
+    navigator.clipboard.writeText(String(agent.id)).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
 
   // Rendered via a portal directly into <body>: TreasuryConsole's ".content"
   // ancestor establishes its own stacking context (position:relative +
@@ -28,9 +38,14 @@ export function AgentDetailDrawer({ agent, vendors, perTxCap, onClose }: Props) 
         </button>
 
         <div className="drawer-header">
-          <div className="role-badge">{agent.roleBadge || "Agent"}</div>
+          <div className={`role-badge ${roleColorClass(agent.roleBadge || "")}`}>{agent.roleBadge || "Agent"}</div>
           <h2>{agent.name}</h2>
-          <div className="mono drawer-agent-id">agent_id: {agent.id}</div>
+          <div className="mono drawer-agent-id">
+            agent_id: {agent.id}
+            <button className={`copy-btn ${copied ? "copied" : ""}`} onClick={copyAgentId}>
+              {copied ? "Copied!" : "Copy"}
+            </button>
+          </div>
           {agent.description && <p className="hint">{agent.description}</p>}
         </div>
 
@@ -38,6 +53,7 @@ export function AgentDetailDrawer({ agent, vendors, perTxCap, onClose }: Props) 
           <div className="drawer-stat">
             <div className="drawer-stat-value">${agent.allocatedBudget.toLocaleString()}</div>
             <div className="drawer-stat-label">Allocated budget</div>
+            <div className="stat-caption">allocation, not remaining balance</div>
           </div>
           <div className="drawer-stat">
             <div className="drawer-stat-value">{settledCount}</div>
@@ -45,21 +61,21 @@ export function AgentDetailDrawer({ agent, vendors, perTxCap, onClose }: Props) 
           </div>
           <div className="drawer-stat">
             <div className="drawer-stat-value">{blockedCount}</div>
-            <div className="drawer-stat-label">Policy violations blocked</div>
+            <div className="drawer-stat-label">Violations blocked</div>
           </div>
         </div>
 
         <div className="drawer-section">
-          <h3>Policy</h3>
+          <h3>Treasury-wide policy</h3>
           <div className="policy-cap-row">
-            <span className="hint">Treasury-wide per-tx cap, applies to all agents</span>
+            <span className="hint">Treasury-wide per-tx cap (applies to all agents)</span>
             <span className="mono policy-cap-value">{perTxCap}</span>
           </div>
           <div className="vendor-chips">
             {vendors.map((v) => (
-              <div key={v} className="chip selected">
+              <span key={v} className="badge-green mono">
                 {v}
-              </div>
+              </span>
             ))}
           </div>
         </div>
@@ -72,7 +88,7 @@ export function AgentDetailDrawer({ agent, vendors, perTxCap, onClose }: Props) 
           {recent.map((e) => (
             <div key={e.seq} className={`activity-row ${e.status}`}>
               <span className="sealed mono">●●●●●●</span>
-              <span className="mono activity-vendor">{e.status === "rejected" ? e.vendor : "SEALED"}</span>
+              <span className="mono activity-vendor">{e.status === "rejected" ? e.vendor : ""}</span>
               <span className="mono activity-time">{new Date(e.timestamp).toLocaleTimeString()}</span>
               <span className={`status-tag ${e.status}`}>
                 {e.status === "verified" ? "✓ verified" : "✗ rejected"}

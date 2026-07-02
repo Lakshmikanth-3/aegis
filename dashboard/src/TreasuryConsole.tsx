@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { createAgent, fetchPolicy, updatePolicy, type Policy } from "./api";
 import { AgentDetailDrawer } from "./AgentDetailDrawer";
+import { useEvents } from "./EventsContext";
+import { roleColorClass } from "./roleColors";
 
 const VENDOR_CATALOG = [
   "aws-compute",
@@ -14,6 +16,7 @@ const VENDOR_CATALOG = [
 ];
 
 export function TreasuryConsole() {
+  const events = useEvents();
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rootJustUpdated, setRootJustUpdated] = useState(false);
@@ -160,18 +163,25 @@ export function TreasuryConsole() {
         </p>
         {policy.agents.map((a) => {
           const max = Math.max(...policy.agents.map((x) => x.allocatedBudget), 1);
+          // Remaining balance is deliberately never computed or shown here --
+          // that's the shielded-by-default guarantee. The bar reflects this
+          // agent's allocation relative to the rest of the fleet, and the
+          // payment count (from the real SSE event log) is the only
+          // per-agent activity signal shown on the roster view.
+          const paymentCount = events.filter((e) => e.agentId === a.id && e.status === "verified").length;
           return (
             <div className="agent-row clickable" key={a.id} onClick={() => setSelectedAgentId(a.id)}>
-              <div className="agent-name">
-                {a.roleBadge && <span className="role-badge-inline">{a.roleBadge}</span>}
-                {a.name}
-              </div>
+              <div className="agent-name">{a.name}</div>
               <div className="budget-bar-track">
                 <div className="budget-bar-fill" style={{ width: `${(a.allocatedBudget / max) * 100}%` }} />
               </div>
               <div className="budget-label">
-                {a.allocatedBudget.toLocaleString()} cap {a.perTxCap} (treasury-wide)
+                {a.allocatedBudget.toLocaleString()} allocated · {paymentCount} payment{paymentCount === 1 ? "" : "s"}
               </div>
+              {a.roleBadge && (
+                <span className={`role-badge-inline ${roleColorClass(a.roleBadge)}`}>{a.roleBadge}</span>
+              )}
+              <span className="agent-row-chevron">→</span>
             </div>
           );
         })}
