@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { createAgent, fetchPolicy, updatePolicy, type Policy } from "./api";
 import { AgentDetailDrawer } from "./AgentDetailDrawer";
+
+// Lazy so chart.js only loads when the Fleet Health tab is opened.
+const FleetHealth = lazy(() => import("./FleetHealth").then((m) => ({ default: m.FleetHealth })));
 import { useEvents } from "./EventsContext";
 import { roleColorClass } from "./roleColors";
 
@@ -25,6 +28,7 @@ export function TreasuryConsole() {
   const [agentBudget, setAgentBudget] = useState(10000);
   const [capInput, setCapInput] = useState(500);
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
+  const [consoleTab, setConsoleTab] = useState<"overview" | "health">("overview");
 
   async function refresh() {
     try {
@@ -90,6 +94,29 @@ export function TreasuryConsole() {
     <div>
       {error && <div className="error-banner">{error}</div>}
 
+      <div className="console-tabs">
+        <button
+          className={`console-tab ${consoleTab === "overview" ? "active" : ""}`}
+          onClick={() => setConsoleTab("overview")}
+        >
+          Overview
+        </button>
+        <button
+          className={`console-tab ${consoleTab === "health" ? "active" : ""}`}
+          onClick={() => setConsoleTab("health")}
+        >
+          Fleet Health
+        </button>
+      </div>
+
+      {consoleTab === "health" && (
+        <Suspense fallback={<div className="hint">Loading fleet health…</div>}>
+          <FleetHealth />
+        </Suspense>
+      )}
+
+      {consoleTab === "overview" && (
+      <>
       <div className="panel">
         <h2>Create Agent</h2>
         <p className="hint">
@@ -186,6 +213,8 @@ export function TreasuryConsole() {
           );
         })}
       </div>
+      </>
+      )}
 
       {selectedAgentId !== null &&
         (() => {

@@ -1289,3 +1289,586 @@ button.ghost.danger:hover {
     flex-wrap: wrap;
   }
 }
+
+/* ---- Proof Inspector (feed slide-out panel) ---- */
+
+.feed-row.inspectable {
+  cursor: pointer;
+}
+
+.proof-inspector {
+  width: 500px;
+}
+
+.inspector-title {
+  margin: 8px 0 4px;
+  font-size: 20px;
+}
+
+.rejected-title {
+  color: var(--danger);
+}
+
+.constraint-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.constraint-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  line-height: 1.45;
+}
+
+.constraint-row.passed {
+  color: var(--accent);
+}
+
+.constraint-row.failed {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.constraint-row.unevaluated {
+  color: var(--text-faint);
+}
+
+.constraint-mark {
+  flex: 0 0 auto;
+}
+
+.inspector-callout {
+  border: 1px solid var(--accent-soft);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.inspector-callout.rejected-callout {
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+  margin-top: 12px;
+}
+
+.reject-detail {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.public-inputs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.public-inputs-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--panel-border-soft);
+  vertical-align: top;
+}
+
+.public-inputs-table td:first-child {
+  color: var(--text-dim);
+  white-space: nowrap;
+  width: 1%;
+}
+
+.public-inputs-table .pi-value {
+  color: var(--text);
+  word-break: break-all;
+}
+
+.inspector-fact {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.inspector-txhash {
+  font-size: 11.5px;
+  word-break: break-all;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--panel-border-soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.inspector-tx-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.tx-link {
+  color: var(--pending, #6ea8ff);
+  font-size: 12.5px;
+  text-decoration: none;
+}
+
+.tx-link:hover {
+  text-decoration: underline;
+}
+
+/* ---- Threat demo (feed) ---- */
+
+.feed-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.threat-btn {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.threat-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.threat-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.threat-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .threat-banner {
+    animation: fade-up 0.2s ease-out;
+  }
+}
+
+.threat-banner-detail {
+  font-weight: 400;
+  color: color-mix(in srgb, var(--danger) 75%, var(--text));
+  font-size: 12px;
+}
+
+.threat-toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--accent-soft);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .threat-toast {
+    animation: fade-up 0.2s ease-out;
+  }
+}
+
+.threat-toast-close {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+/* ---- Attestation: proving progress + result card ---- */
+
+.proving-panel {
+  margin-top: 18px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .proving-panel {
+    animation: fade-up 0.2s ease-out;
+  }
+}
+
+.proving-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  padding: 8px 0;
+  color: var(--text-faint);
+}
+
+.proving-step.active {
+  color: var(--text);
+}
+
+.proving-step.done {
+  color: var(--accent);
+}
+
+.proving-marker {
+  width: 18px;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--panel-border);
+  border-top-color: var(--accent);
+  display: inline-block;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .spinner {
+    animation: spinner-rotate 0.8s linear infinite;
+  }
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.attestation-verified-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.attestation-check {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft);
+}
+
+.attestation-verified-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 2px 0;
+}
+
+.attestation-claims {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.attestation-claim {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft);
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 9px 13px;
+  font-size: 13.5px;
+}
+
+.attestation-details {
+  margin-top: 12px;
+}
+
+/* ---- Fleet Health tab (console) ---- */
+
+.console-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--panel-border-soft);
+  padding-bottom: 0;
+}
+
+.console-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.console-tab:hover {
+  color: var(--text);
+}
+
+.console-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.health-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .health-cards {
+    animation: fade-up 0.2s ease-out;
+  }
+}
+
+.health-card {
+  background: var(--panel-solid);
+  border: 1px solid var(--panel-border-soft);
+  border-radius: var(--radius);
+  padding: 18px 16px;
+}
+
+.health-card-value {
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.health-card-value.ok {
+  color: var(--accent);
+}
+
+.health-card-value.warn {
+  color: var(--role-amber, #ffb648);
+}
+
+.health-card-value.bad {
+  color: var(--danger);
+}
+
+.health-card-label {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.risk-table-wrap {
+  overflow-x: auto;
+}
+
+.risk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.risk-table th {
+  text-align: left;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  font-weight: 600;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--panel-border-soft);
+  white-space: nowrap;
+}
+
+.risk-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--panel-border-soft);
+  vertical-align: middle;
+}
+
+.rate-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rate-bar-track {
+  display: inline-block;
+  width: 70px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--panel-border-soft);
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.rate-bar-track.wide {
+  width: 110px;
+}
+
+.rate-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.rate-bar-fill.ok {
+  background: var(--accent);
+}
+
+.rate-bar-fill.warn {
+  background: var(--role-amber, #ffb648);
+}
+
+.rate-bar-fill.bad {
+  background: var(--danger);
+}
+
+.rate-bar-fill.neutral {
+  background: var(--pending);
+}
+
+.rate-value.ok {
+  color: var(--accent);
+}
+
+.rate-value.warn {
+  color: var(--role-amber, #ffb648);
+}
+
+.rate-value.bad {
+  color: var(--danger);
+}
+
+.risk-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 20px;
+  padding: 4px 10px;
+}
+
+.risk-pill.ok {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.risk-pill.warn {
+  color: var(--role-amber, #ffb648);
+  background: color-mix(in srgb, var(--role-amber, #ffb648) 14%, transparent);
+}
+
+.risk-pill.bad {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.risk-pill.nodata {
+  color: var(--text-faint);
+  background: var(--panel-border-soft);
+}
+
+.outcome-chart-wrap {
+  height: 220px;
+}
+
+@media (max-width: 860px) {
+  .health-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ---- Agent drawer: cap tooltip + feed link ---- */
+
+.drawer-header h2 {
+  font-weight: 500;
+}
+
+.info-tip {
+  position: relative;
+  display: inline-block;
+  margin-left: 6px;
+}
+
+.info-tip-trigger {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: help;
+  font-size: 12px;
+  padding: 0;
+  line-height: 1;
+}
+
+.info-tip-trigger:hover,
+.info-tip-trigger:focus {
+  color: var(--text);
+}
+
+.info-tip-bubble {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 240px;
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text);
+  z-index: 60;
+  box-shadow: 0 8px 24px -8px #00000080;
+}
+
+.info-tip:hover .info-tip-bubble,
+.info-tip:focus-within .info-tip-bubble {
+  display: block;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .info-tip:hover .info-tip-bubble,
+  .info-tip:focus-within .info-tip-bubble {
+    animation: fade-up 0.15s ease-out;
+  }
+}
+
+.drawer-feed-link {
+  display: inline-block;
+  margin-top: 12px;
+}

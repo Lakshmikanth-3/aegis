@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import { useEvents } from "./EventsContext";
 import { roleColorClass } from "./roleColors";
 import type { PolicyAgent } from "./api";
@@ -68,7 +69,18 @@ export function AgentDetailDrawer({ agent, vendors, perTxCap, onClose }: Props) 
         <div className="drawer-section">
           <h3>Treasury-wide policy</h3>
           <div className="policy-cap-row">
-            <span className="hint">Treasury-wide per-tx cap (applies to all agents)</span>
+            <span className="hint">
+              Treasury-wide per-tx cap (applies to all agents)
+              <span className="info-tip">
+                <button className="info-tip-trigger" aria-label="How the cap is enforced">
+                  ⓘ
+                </button>
+                <span className="info-tip-bubble" role="tooltip">
+                  This cap is enforced on-chain by the ZK circuit. Every proof must satisfy amount ≤ {perTxCap} or
+                  no valid proof exists.
+                </span>
+              </span>
+            </span>
             <span className="mono policy-cap-value">{perTxCap}</span>
           </div>
           <div className="vendor-chips">
@@ -95,6 +107,9 @@ export function AgentDetailDrawer({ agent, vendors, perTxCap, onClose }: Props) 
               </span>
             </div>
           ))}
+          <Link className="tx-link drawer-feed-link" to="/feed">
+            View in live feed →
+          </Link>
         </div>
       </div>
     </div>,

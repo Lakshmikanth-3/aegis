@@ -16,6 +16,41 @@ const PERIOD_OPTIONS: { value: AttestationPeriod; label: string }[] = [
   { value: "session", label: "This session" },
 ];
 
+/**
+ * Shown while the awaited POST /api/attestation call runs. The orchestrator
+ * really does perform these three steps in this order for every attestation;
+ * the *active-step highlight* is a time-based estimate, clearly labeled as
+ * such, because the single HTTP call reports no mid-flight progress.
+ */
+function ProvingProgress() {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const id = setInterval(() => setElapsed((Date.now() - started) / 1000), 250);
+    return () => clearInterval(id);
+  }, []);
+  const stage = elapsed < 3 ? 0 : elapsed < 8 ? 1 : 2;
+  const steps = [
+    "Building commitment snapshot…",
+    "Running nargo execute + bb prove…",
+    "Submitting to Stellar Testnet…",
+  ];
+  return (
+    <div className="panel proving-panel">
+      {steps.map((s, i) => (
+        <div key={s} className={`proving-step mono ${i === stage ? "active" : i < stage ? "done" : "pending"}`}>
+          <span className="proving-marker">{i < stage ? "✓" : i === stage ? <span className="spinner" /> : "·"}</span>
+          {s}
+        </div>
+      ))}
+      <div className="hint" style={{ marginTop: 12 }}>
+        Real UltraHonk proof · ~14 KB · Barretenberg v0.87.0 · {Math.floor(elapsed)}s elapsed (step highlight is
+        estimated — the proving call reports no intermediate progress)
+      </div>
+    </div>
+  );
+}
+
 export function AttestationScreen() {
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [agentId, setAgentId] = useState<number | null>(null);
@@ -30,6 +65,7 @@ export function AttestationScreen() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [showCopiedToast, setShowCopiedToast] = useState(false);
   const [showVerifyCommand, setShowVerifyCommand] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(true);
 
   useEffect(() => {
     fetchPolicy().then((p) => {
@@ -59,6 +95,7 @@ export function AttestationScreen() {
       const result = await generateAttestation(agentId, periodLabel, period);
       setAttestation(result);
       setShowVerifyCommand(false);
+      setDetailsOpen(true);
       const verifyUrl = verificationLink(result);
       setQrDataUrl(await QRCode.toDataURL(verifyUrl, { margin: 1, width: 200 }));
     } catch (err) {
@@ -155,41 +192,73 @@ export function AttestationScreen() {
         </div>
       </div>
 
+      {generating && <ProvingProgress />}
+
       {attestation && (
         <div className="panel attestation-card">
           <div className="attestation-card-body">
-            <div className="attestation-fleet-name">Aegis Fleet · {attestation.periodLabel}</div>
-            <div className="attestation-line" style={{ marginBottom: 10 }}>
-              {attestation.agentName} · {PERIOD_OPTIONS.find((o) => o.value === attestation.periodType)?.label}
+            <div className="attestation-verified-header">
+              <span className="attestation-check" aria-hidden="true">
+                ✓
+              </span>
+              <div>
+                <div className="attestation-fleet-name">Aegis Fleet · {attestation.periodLabel}</div>
+                <div className="attestation-verified-title">Attestation verified</div>
+                <div className="attestation-line">
+                  {attestation.txHash ? "Verified on Stellar Testnet" : "Generated"} at{" "}
+                  {new Date(attestation.generatedAt).toLocaleString()}
+                </div>
+              </div>
             </div>
-            <div className="attestation-headline">
-              Total spend &le; <span className="mono">${attestation.maxSpendClaim.toLocaleString()}</span>
+
+            {/* The attestation circuit is per-agent, so the claims name the
+                agent rather than claiming fleet-wide facts one proof can't
+                actually cover. */}
+            <div className="attestation-claims">
+              <div className="attestation-claim">
+                ✓ {attestation.agentName}'s cumulative spend ≤{" "}
+                <span className="mono">${attestation.maxSpendClaim.toLocaleString()}</span> ·{" "}
+                {PERIOD_OPTIONS.find((o) => o.value === attestation.periodType)?.label}
+              </div>
+              {attestation.vendorComplianceOk && (
+                <div className="attestation-claim">✓ 0 payments to non-allow-listed vendors</div>
+              )}
+              {attestation.txHash && (
+                <div className="attestation-claim">✓ Proof verified by AegisTreasury (CAP-80 BN254)</div>
+              )}
             </div>
-            {attestation.vendorComplianceOk && (
-              <div className="attestation-line">0 payments to non-allow-listed vendors</div>
-            )}
+
             <div className="attestation-line">
-              Starting {new Date(attestation.periodStartTimestamp).toLocaleString()}
+              Period starting {new Date(attestation.periodStartTimestamp).toLocaleString()}
               {attestation.periodClamped && " (earliest data available -- no history predates this)"}
             </div>
-            {attestation.txHash && attestation.explorerUrl ? (
-              <div className="attestation-line">
-                Proof verified on Stellar Testnet · <span className="mono">{attestation.txHash.slice(0, 12)}…</span>{" "}
-                <a href={attestation.explorerUrl} target="_blank" rel="noreferrer">
-                  view on stellar.expert →
-                </a>
-              </div>
-            ) : (
-              <div className="attestation-line">Proof verified on Stellar Testnet</div>
-            )}
 
-            <div className="mono attestation-technical">
-              proof: {attestation.proofBytes} bytes (real UltraHonk proof, not a placeholder)
-              <br />
-              starting commitment: {attestation.startingCommitment}
-              <br />
-              ending commitment: {attestation.endingCommitment}
-            </div>
+            <button className="verify-toggle" onClick={() => setDetailsOpen((v) => !v)}>
+              {detailsOpen ? "Hide proof details" : "Show proof details"}
+            </button>
+            {detailsOpen && (
+              <div className="attestation-details">
+                {attestation.txHash && attestation.explorerUrl ? (
+                  <div className="attestation-line">
+                    <span className="mono">{attestation.txHash.slice(0, 12)}…</span>{" "}
+                    <a href={attestation.explorerUrl} target="_blank" rel="noreferrer">
+                      view on stellar.expert →
+                    </a>
+                  </div>
+                ) : (
+                  <div className="attestation-line">No on-chain tx recorded for this attestation.</div>
+                )}
+                <div className="mono attestation-technical">
+                  Proof type: compliance_attestation · UltraHonk · {attestation.proofBytes.toLocaleString()} bytes
+                  <br />
+                  Verified by contract: {attestation.contractId}
+                  <br />
+                  starting commitment: {attestation.startingCommitment}
+                  <br />
+                  ending commitment: {attestation.endingCommitment}
+                </div>
+              </div>
+            )}
 
             <div className="attestation-actions">
               <button className="primary" onClick={handleCopyLink}>
@@ -210,7 +279,7 @@ export function AttestationScreen() {
             <div className="attestation-qr">
               <img src={qrDataUrl} alt="Attestation verification QR code" width={200} height={200} />
               <div className="hint" style={{ textAlign: "center", marginTop: 8 }}>
-                Scan to open the verification link
+                Scan to independently verify this attestation
               </div>
             </div>
           )}

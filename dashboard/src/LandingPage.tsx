@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import "./LandingPage.css";
-import { fetchStatus, fetchSummary, type Status, type Summary } from "./api";
+import { fetchPolicy, fetchStatus, fetchSummary, type Policy, type Status, type Summary } from "./api";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { HeroOrb } from "./HeroOrb";
+import { useEvents } from "./EventsContext";
+import { roleColorClass } from "./roleColors";
 
 const HOW_IT_WORKS = [
   {
@@ -164,6 +166,8 @@ export function LandingPage() {
         </div>
       </section>
 
+      <LiveActivityTicker />
+
       <section className="built-on" id="built-on">
         <div className="built-on-inner">
           {BUILT_ON.map((b, i) => (
@@ -182,6 +186,84 @@ export function LandingPage() {
         <span className="mono">Built on Noir · UltraHonk · Soroban</span>
       </footer>
     </div>
+  );
+}
+
+/**
+ * Last 5 payment events, straight off the orchestrator's SSE stream (pushed
+ * in real time -- no polling needed). Settled payments keep both amount and
+ * vendor sealed; a rejected payment names its vendor, matching the feed's
+ * disclosure rule. Only events witnessed by this browser session exist
+ * client-side, so the empty state invites starting the fleet rather than
+ * showing canned rows.
+ */
+function LiveActivityTicker() {
+  const events = useEvents();
+  const [policy, setPolicy] = useState<Policy | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchPolicy()
+      .then((p) => !cancelled && setPolicy(p))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const recent = [...events].slice(-5).reverse();
+
+  function roleOf(agentId: number): string {
+    return policy?.agents.find((a) => a.id === agentId)?.roleBadge ?? "";
+  }
+
+  function ago(iso: string): string {
+    const s = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 1000));
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    return `${Math.floor(m / 60)}h ago`;
+  }
+
+  return (
+    <section className="ticker-section">
+      <h2 className="section-title">Live treasury activity · updated in real time</h2>
+      <p className="ticker-subtitle">
+        Amounts are sealed by zero-knowledge proof. Vendors are hidden for settled payments.
+      </p>
+      {recent.length === 0 ? (
+        <div className="ticker-empty">
+          Waiting for agent activity — every row here is a real proof and (if it settles) a real Testnet
+          transaction. <Link to="/feed">Start the fleet on the live feed →</Link>
+        </div>
+      ) : (
+        <div className="ticker-list">
+          {recent.map((e) => {
+            const role = roleOf(e.agentId);
+            return (
+              <div key={e.seq} className="ticker-row">
+                <span className={`role-badge-inline ${role ? roleColorClass(role) : ""}`}>{e.agentName}</span>
+                <span className="ticker-arrow">→</span>
+                <span className="mono ticker-vendor">
+                  {e.status === "rejected" ? e.vendor : "sealed vendor"}
+                </span>
+                <span className="sealed mono">●●●●●●</span>
+                <span className={`ticker-status ${e.status === "verified" ? "ok" : "bad"}`}>
+                  {e.status === "verified" ? "✓ settled" : "✗ blocked"}
+                </span>
+                <span className="ticker-time mono">{ago(e.timestamp)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@paper-design/shaders-react": "^0.0.76",
+    "chart.js": "^4.5.1",
     "qrcode": "^1.5.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

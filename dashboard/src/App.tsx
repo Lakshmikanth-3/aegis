@@ -6,6 +6,7 @@ import { LiveSealedFeed } from "./LiveSealedFeed";
 import { AttestationScreen } from "./AttestationScreen";
 import { LandingPage } from "./LandingPage";
 import { VendorsScreen } from "./VendorsScreen";
+import { PitchDeck } from "./PitchDeck";
 import { fetchStatus, type Status } from "./api";
 import { EventsProvider } from "./EventsContext";
 
@@ -62,6 +63,9 @@ function AppShell() {
           <Link className={`tab ${location.pathname === "/attestation" ? "active" : ""}`} to="/attestation">
             Compliance Attestation
           </Link>
+          <Link className="tab" to="/pitch">
+            Pitch Deck
+          </Link>
         </div>
         {status?.contractId && (
           <a
@@ -107,6 +111,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/pitch" element={<PitchDeck />} />
           <Route element={<AppShell />}>
             <Route path="/console" element={<TreasuryConsole />} />
             <Route path="/feed" element={<LiveSealedFeed />} />

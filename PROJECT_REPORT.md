@@ -3,16 +3,19 @@
 *Confidential, provably-compliant treasury rails for AI agent payments on Stellar.*
 
 > **Report generated:** 2026-07-02, by auditing the codebase end-to-end, actually executing every test suite and the live demo scenario against a freshly deployed Stellar Testnet contract, and independently grepping for mocked/placeholder/hardcoded logic. Every number, transaction hash, and contract ID below is from a real run performed for this report, not copied from documentation.
+> **Last updated:** 2026-07-03 (evening) — six-feature dashboard expansion + in-app pitch deck (§3.8), README rewritten with Mermaid diagrams, public Vercel deployment (§3.7), live totals refreshed (§0).
 
 ---
 
-## 0. Current status (as of 2026-07-02, latest check)
+## 0. Current status (as of 2026-07-03, latest check)
 
 - **Orchestrator:** running at `http://localhost:4000`, `ready: true`.
-- **Dashboard:** running at `http://localhost:5173`.
-- **Live contract:** `CDPFNNPOXFZLFZOJRUN6PW7LYWOIU6SLFBJZKP3BUC6YMOUIL6XB6MF6` (same instance since §4.2's deployment — has stayed up across the whole UI-overhaul and hero-section work below).
-- **Live totals right now** (`GET /api/summary`): **16 settled, 15 rejected, 0 violations reached settlement, 31 total** — higher than §4.2's original 9/3/12 because of the additional real payments triggered while verifying the dashboard changes in §3.5 and §3.6.
-- **Code status:** all 6 dashboard UI-overhaul tasks (§3.5) plus the hero-section visual port (§3.6) are complete and verified live. No known open bugs. Remaining items are the disclosed roadmap gaps in §8, not defects.
+- **Dashboard (local dev):** running at `http://localhost:5173`.
+- **Dashboard (public):** deployed on Vercel at **`https://aegis-delta-gules.vercel.app`** — root page, deep routes, and assets all verified returning 200 (see §3.7 for what the public deployment does and doesn't include).
+- **Live contract:** `CDPFNNPOXFZLFZOJRUN6PW7LYWOIU6SLFBJZKP3BUC6YMOUIL6XB6MF6` (same instance since §4.2's deployment — has stayed up across the UI overhaul, hero-section work, and deployment work below).
+- **Live totals right now** (`GET /api/summary`): **45 settled, 35 rejected, 0 violations reached settlement, 80 total** — up from the morning's 31/25/56 because every feature in §3.8 was verified by triggering additional real payments, rejections, and attestation proofs.
+- **Code status:** all 6 dashboard UI-overhaul tasks (§3.5), the hero-section visual port (§3.6), the public Vercel deployment (§3.7), and the six-feature expansion plus in-app pitch deck (§3.8) are complete and verified live. No known open bugs. Remaining items are the disclosed roadmap gaps in §8, not defects.
+- **Repo state:** committed and pushed through `bec8d7a` (README rewrite with Mermaid diagrams). **The entire §3.8 feature expansion is currently uncommitted working-tree changes** (4 new dashboard source files, 8 modified, plus the `chart.js` dependency) — pushing it will also redeploy the public Vercel site. The two `Prover.toml` scratch files are rewritten by every proof run and just hold the latest proof's inputs.
 - To run everything from scratch instead of using the already-running instance, see §9.
 
 ---
@@ -65,6 +68,7 @@ The project began as a hackathon PRD (`docs/shadow.md`), originally named **Umbr
      /feed        Live Sealed Feed (sealed amounts, real-time SSE)
      /vendors     Vendor allow-list management (real Merkle root updates)
      /attestation Compliance Attestation (24h / 7d / session, QR + independent verify)
+     /pitch       In-app 10-slide pitch deck (architecture + flow diagrams, live stats)
 ```
 
 Every arrow above is a real network call except the bottom one (x402/MPP facilitator), which is an explicitly disclosed out-of-scope boundary (see §5).
@@ -83,6 +87,8 @@ Every arrow above is a real network call except the bottom one (x402/MPP facilit
 | `deploy/` | Standalone shell scripts for manual contract inspection/deployment |
 | `docs/shadow.md` | The original hackathon PRD (pre-rename, "Umbra") |
 | `agent-hero-section/` | Standalone Next.js/Tailwind/shadcn scaffold, a design reference only (§3.6) — its hero visual was ported into `dashboard/`, this folder itself is not run or deployed |
+| `DEMO_SCRIPT.md` | Full narration script for the demo video, written against the verified live behavior (committed 2026-07-03) |
+| `vercel.json` | Vercel deployment config — builds `dashboard/` from the monorepo root and adds SPA rewrites (§3.7) |
 
 ---
 
@@ -148,6 +154,30 @@ A separate, standalone Next.js/Tailwind/shadcn scaffold (`agent-hero-section/`, 
 - **Two real bugs hit during integration, both fixed and verified, not left open:**
   1. Right after `npm install`, the orb crashed with a React "Invalid hook call" — the already-running Vite dev server had a stale `node_modules/.vite` dependency-optimization cache from before the new package existed. Fixed by clearing the cache and restarting the dev server.
   2. The template's code passed a prop called `spotsPerColor`, which doesn't exist in this package's actual API (confirmed against its real `.d.ts` and source — the real prop is `spots`). Because it wasn't a recognized prop, it fell through to `...rest` and got spread onto the underlying DOM canvas element, triggering a React warning that failed the e2e suite's "no console errors" check. Fixed by using the correct prop name (`spots={5}`); suite back to 12/12 clean.
+
+### 3.7 Public deployment to Vercel (2026-07-03)
+
+The dashboard is now publicly deployed at **`https://aegis-delta-gules.vercel.app`**, via the Vercel GitHub integration on the `main` branch of `Lakshmikanth-3/aegis`.
+
+- **A real deployment bug was hit and fixed:** the first deployment returned `404: NOT_FOUND` on every URL. Cause: the repo is a monorepo and the site lives in `dashboard/`, but Vercel was building from the repo root, where there is no app at all. Fixed by adding a root-level `vercel.json` (commit `48f61ee`) that installs and builds inside `dashboard/` (`npm install --prefix dashboard`, `npm run build --prefix dashboard`), serves `dashboard/dist`, and rewrites all paths to `/index.html` — the rewrite is required because the app uses React Router's `BrowserRouter`, so without it a refresh or direct link on `/console`, `/feed`, `/vendors`, or `/attestation` would 404 even after the build fix.
+- **Verified after deploy:** `/` (200, serves the built app), `/vendors` deep link (200 via the SPA rewrite), and the hashed JS bundle (200). Future pushes to `main` now deploy correctly with no manual steps.
+- **Known limitation (disclosed, not a bug):** the dashboard's API base defaults to `http://localhost:4000` (`dashboard/src/api.ts:1`, overridable via `VITE_API_BASE`). The orchestrator — which shells out to WSL-local `nargo`/`bb`/`stellar-cli` — is not hosted anywhere public. So the public deployment serves the full UI (landing page, all screens, animations), but the live-data screens only populate for a viewer who also has the orchestrator running locally. Making the deployed site fully live for any visitor requires hosting the orchestrator and setting `VITE_API_BASE` at build time — added to the roadmap in §8.
+
+### 3.8 Six-feature dashboard expansion + in-app pitch deck (2026-07-03, post-deployment)
+
+A second major dashboard pass, adding judge-facing features on top of the working system. Every feature was verified against the live orchestrator and Testnet contract by actually triggering real payments/rejections/attestations (this is why the totals in §0 jumped by 14 settled / 10 rejected during the day), with a screenshot check and a full 12/12 e2e re-run after each one. The backend was not modified at all.
+
+1. **Proof Inspector** (`/feed`, new `ProofInspector.tsx`) — click any feed row and a slide-out panel shows what the circuit checked: the 5 constraints, the event's **real** public inputs (old/new commitments, agent nonce — straight from the proving run), real proof size, real tx hash with stellar.expert link, and a "why this is real ZK" note. For rejections: the failed constraint highlighted red plus the **actual `nargo` stderr** (e.g. `Failed constraint src/main.nr:32:12 assert(amount ≤ per_tx_cap)`); constraints after the failed one are shown as *unevaluated*, not passed, since `nargo` stops at the first failing assert. Cap/allow-list root are fetched live from `/api/policy` and labeled "(current policy)" because events don't snapshot the policy they were proved against.
+2. **In-app pitch deck** (`/pitch`, new `PitchDeck.tsx`/`.css`, new topbar tab) — a 10-slide full-screen deck for presenting to judges: problem, "make the proof the gatekeeper", a CSS-built **architecture diagram** (agents → orchestrator → contract → x402, dashboard below, labeled arrows, dashed logged-hop), a **payment-flow diagram** with a red "any rule broken → no proof exists" branch, the 5 circuit constraints, a **live-numbers slide fetched from the real API every 10s** (shows an error banner if the orchestrator is down — never stale figures), demo pointers linking into the app, honest boundaries, and a close. Keyboard navigation (←/→/Space/Home/End), dots, fullscreen button.
+3. **Threat demo** (`/feed`) — a "Run threat demo — real circuit enforcement" button fires three real `POST /api/pay` calls in sequence: a compliant baseline (settles on-chain), an over-cap attack, and an unlisted-vendor attack (both rejected by real `nargo` constraint failures). A staged banner (1/3→3/3) tracks progress — attempts are awaited sequentially rather than fired on a timer, so the stage indicator never lies about what's actually proving — and the completion toast counts outcomes **from the actual API responses** ("1 settled · 2 blocked by ZK circuit · 0 reached settlement"), not from assumptions.
+4. **Attestation loading state + result card** (`/attestation`) — a three-step proving progress panel (snapshot → nargo/bb → testnet submit) with elapsed-seconds counter; the step highlight is time-estimated and *labeled as estimated*, since the single HTTP call reports no mid-flight progress. The result card gained a large green check header with verification timestamp, three claim rows, and a collapsible proof-details block (tx hash, proof type/size, contract ID, both commitments). The claims deliberately name the **agent**, not the fleet — the attestation circuit is per-agent, and a "total fleet spend" claim would overstate what one proof covers.
+5. **Fleet Health tab** (`/console`, new `FleetHealth.tsx`, lazy-loaded) — four metric cards (total shielded value, policy compliance rate with green/amber/red thresholds, active agents, circuit rejections) refreshed every 10s from the real API; an agent risk table where **lifetime settled counts come from each agent's on-chain nonce** (it increments exactly once per settled spend) while rejections/rates are session-scoped from SSE events, with the two lifetimes explicitly labeled and "no session activity" shown instead of fabricated 0% rates; and a Chart.js bar chart of the last 20 session payments (binary pass/fail heights — amounts are never charted). The spec's "cap utilization" column was renamed "activity share" because balances are shielded and true utilization is unknowable by design.
+6. **Agent drawer completion** (`/console`) — added the cap info-tooltip ("enforced on-chain by the ZK circuit… or no valid proof exists", showing the live cap value) and a "View in live feed →" link to the existing drawer.
+7. **Landing live-activity ticker** (`/`) — last 5 payment events below "How it works", pushed in real time over SSE (no polling): role-badged agent → vendor (named only for rejections, "sealed vendor" for settlements) → `●●●●●●` → settled/blocked status → live-ticking age. Empty state invites starting the fleet instead of ever showing canned rows.
+
+**Cross-cutting decisions, applied consistently:** the spec these features were built from assumed a `GET /api/payments` history endpoint that does not exist on the real orchestrator — instead of inventing one (backend off-limits) or mocking data, all history-dependent UI runs off the real SSE event stream and is explicitly labeled session-scoped. Chart.js and QRCode come from npm (real, pinned dependencies), not CDN script tags, so the app has no runtime CDN dependency; Chart.js is code-split and loads only when Fleet Health opens. All new animations are wrapped in `prefers-reduced-motion: no-preference`. No plaintext settled amount is rendered anywhere, including chart tooltips and the threat-demo banner/toast. A final keyword sweep across all dashboard source found no undisclosed mocks/placeholders/hardcodes/bypasses.
+
+**Bugs found and fixed during this pass's own verification (all caught by screenshots, not left open):** the pitch deck's Dashboard architecture node rendered 520px *tall* (flex-basis applying to height in a column container — fixed to a width); the copy-link toast appeared to fail in headless testing but was diagnosed as the test browser's clipboard permissions, not an app bug (passes with permissions granted).
 
 ---
 
@@ -237,7 +267,7 @@ Lower-priority gaps identified, worth adding in a follow-up pass:
 
 ## 8. Remaining steps to consider the project fully complete
 
-1. **README's live-demo section still contains a literal placeholder** — `[screenshot or gif ... placeholder until the demo video is recorded]` — even though real screenshots already exist in `dashboard/screenshots/` (`landing-hero.png`, `app-console-styled.png`, `app-real-feed-styled.png`, `app-attestation-styled.png`, `landing-trust.png`) and are simply not wired into the README.
+1. ~~README's live-demo section still contains a literal placeholder~~ — **resolved 2026-07-03**: the README was completely rewritten (`bec8d7a`) with Mermaid diagrams and clear structure; a grep confirms no `placeholder`/`screenshot` markers remain. The demo *video* itself is still unrecorded (the narration script exists as `DEMO_SCRIPT.md`).
 2. Live x402/MPP facilitator integration for the final settlement hop (currently logged, not executed).
 3. CAP-79 muxed sub-accounts for per-agent Stellar addresses.
 4. Per-agent (not treasury-wide) per-transaction caps — needs a small circuit extension to carry a per-agent cap as a public input bound to `agent_id`.
@@ -245,8 +275,9 @@ Lower-priority gaps identified, worth adding in a follow-up pass:
 6. A fuller Playwright e2e suite covering real proof-generation and attestation-generation paths end to end, not just navigation/rendered-data assertions.
 7. ~~Mobile-responsive dashboard layout~~ — addressed in the 2026-07-02 UI overhaul (§3.5): a real horizontal-overflow bug in the topbar (tabs wider than a 390px viewport) and non-stacking agent rows were found and fixed, with a proper `max-width: 480px` breakpoint added. Not exhaustively tested on physical devices, but verified via emulated-viewport screenshots on all 4 app-shell screens plus the landing page.
 8. The five test cases listed in §7.
+9. **Host the orchestrator so the public Vercel deployment is live for any visitor** (added 2026-07-03, see §3.7) — the deployed dashboard's API base defaults to `localhost:4000`; the orchestrator currently depends on WSL-local `nargo`/`bb`/`stellar-cli` toolchains, so making it hostable (container image with the toolchain baked in, plus `VITE_API_BASE` set at build time) is a real piece of work, not just a config change.
 
-Items 2–7 above are exactly what the README's own "What we'd build next" section already discloses — nothing new was found beyond item 1 and the test gaps in §7.
+Items 2–7 above are exactly what the README's own "What we'd build next" section already discloses — nothing new was found beyond item 1, the test gaps in §7, and the hosting gap in item 9.
 
 ---
 
@@ -322,4 +353,8 @@ Every claim in the README that was checkable was verified true by actually runni
 
 **Post-audit update (2026-07-02):** the dashboard went through a six-part UI/animation overhaul (§3.5) covering the live feed, landing page, treasury console drawer, vendors screen, attestation card, and a global polish pass. Every change was verified live against the real running orchestrator and Testnet contract — real triggered payments, real vendor allow-list updates, real generated attestation proofs, screenshotted before and after — not just reviewed as code. The pass also caught and fixed a real, pre-existing mobile layout bug (topbar overflow at 390px) that predated this work.
 
-**Same-day follow-up:** the landing page's hero was further upgraded by porting a provided design reference (§3.6) — a real animated WebGL shader visual, recolored to the project's own palette and paired with three accurate (not marketing-fluff) claims about what the system does. Two real integration bugs (a stale build cache, an incorrect upstream prop name) were found and fixed in the process, both confirmed via a clean e2e run afterward. As of this update, both the orchestrator and dashboard are live and running (§0), with real Testnet activity (16 settled / 15 rejected / 0 reached settlement) accumulated over the course of this session's verification work.
+**Same-day follow-up:** the landing page's hero was further upgraded by porting a provided design reference (§3.6) — a real animated WebGL shader visual, recolored to the project's own palette and paired with three accurate (not marketing-fluff) claims about what the system does. Two real integration bugs (a stale build cache, an incorrect upstream prop name) were found and fixed in the process, both confirmed via a clean e2e run afterward.
+
+**Deployment update (2026-07-03):** the dashboard is now publicly deployed at `https://aegis-delta-gules.vercel.app` (§3.7). The initial deployment 404'd because Vercel built the monorepo root instead of `dashboard/`; fixed with a root `vercel.json` (build-into-subdirectory + SPA rewrites for React Router), verified live on the root page, deep links, and assets. The demo-video narration script was also committed (`DEMO_SCRIPT.md`), and all work through the Vercel config is pushed to `main`. The one new disclosed limitation is that the public deployment serves the UI only — its live-data screens need a locally running orchestrator until the orchestrator itself is hosted (§8 item 9).
+
+**Feature-expansion update (2026-07-03, evening):** the dashboard gained six judge-facing features plus an in-app pitch deck (§3.8): a Proof Inspector on every feed row, a real-adversarial-attempt threat demo, a staged attestation loading state and richer result card, a Fleet Health tab (metric cards, agent risk table, Chart.js outcome chart), the agent drawer's cap tooltip and feed link, a real-time landing-page activity ticker, and a 10-slide `/pitch` deck with CSS-built architecture and payment-flow diagrams and a live-stats slide. Every feature was verified against the live system with real payments and proofs — cumulative Testnet activity now stands at **45 settled / 35 rejected / 0 violations reached settlement (80 total)** — the e2e suite passed 12/12 after each feature, and the mock/placeholder/hardcode sweep still comes back clean. The README was also fully rewritten with Mermaid diagrams (`bec8d7a`), resolving the last §8 item-1 placeholder. **The §3.8 work is not yet committed** — it lives in the working tree, and pushing it will redeploy the public site.
