@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { startSimulation, type PaymentEvent } from "./api";
 import { useEvents } from "./EventsContext";
+import { AnimatedNumber } from "./AnimatedNumber";
 
-type FeedRow = PaymentEvent & { phase: "verifying" | "settled" };
+type FeedRow = PaymentEvent & { phase: "sealed" | "revealed" };
+
+const SEAL_DURATION_MS = 900;
 
 export function LiveSealedFeed() {
   const events = useEvents();
-  const [rows, setRows] = useState<FeedRow[]>(() => events.map((e) => ({ ...e, phase: "settled" as const })));
+  const [rows, setRows] = useState<FeedRow[]>(() => events.map((e) => ({ ...e, phase: "revealed" as const })));
   const seenCountRef = useRef(events.length);
   const startedRef = useRef(false);
 
@@ -24,11 +27,11 @@ export function LiveSealedFeed() {
     // "sealed" phase below is a presentation choice (matching the PRD's
     // sealed-card choreography), not a simulation of verification that
     // hasn't actually happened yet.
-    setRows((prev) => [...prev, ...newOnes.map((e) => ({ ...e, phase: "verifying" as const }))]);
+    setRows((prev) => [...prev, ...newOnes.map((e) => ({ ...e, phase: "sealed" as const }))]);
     for (const e of newOnes) {
       setTimeout(() => {
-        setRows((prev) => prev.map((r) => (r.seq === e.seq ? { ...r, phase: "settled" } : r)));
-      }, 500);
+        setRows((prev) => prev.map((r) => (r.seq === e.seq ? { ...r, phase: "revealed" } : r)));
+      }, SEAL_DURATION_MS);
     }
   }, [events]);
 
@@ -44,11 +47,18 @@ export function LiveSealedFeed() {
   return (
     <div>
       <div className="panel">
+        <div className="feed-header">
+          <h2 style={{ margin: 0 }}>Live Sealed Feed</h2>
+          <span className="live-indicator">
+            <span className="live-dot-red" />
+            Live
+          </span>
+        </div>
         <div className="counter-bar">
           <span className="count">
-            <span className="ok">{verified}</span> payments settled ·{" "}
-            <span className="bad">{rejected}</span> policy violations caught ·{" "}
-            <span className="ok">0</span> policy violations reached settlement
+            <AnimatedNumber value={verified} className="ok" /> payments settled ·{" "}
+            <AnimatedNumber value={rejected} className="bad" /> violations blocked ·{" "}
+            <span className="ok">0</span> violations reached settlement
           </span>
           <button className="primary" onClick={handleStart} disabled={startedRef.current}>
             {startedRef.current ? "Running (real proving + testnet, ~10-20s/payment)…" : "Start Agent Fleet"}
@@ -73,41 +83,71 @@ export function LiveSealedFeed() {
 }
 
 function FeedRowView({ row }: { row: FeedRow }) {
-  const sealed = row.phase === "verifying";
-  const className = sealed ? "feed-row pending" : `feed-row ${row.status}`;
+  const sealed = row.phase === "sealed";
+  const statusClass = sealed ? "pending" : row.status;
+  const rowClassName = `feed-row ${statusClass}`;
+  const now = useTicker(2000);
 
   return (
-    <div className={className} title={row.rejectDetail ?? undefined}>
-      <div>{row.agentName}</div>
-      <div className={sealed || row.status === "verified" ? "sealed" : ""}>
-        {/* Amount is never shown in the UI, pass or fail. Vendor stays
-            sealed for a settled (verified) payment -- that's the entire
-            confidentiality guarantee -- but is shown for a rejected one,
-            since a rejected payment never actually spent anything and
-            naming the vendor is useful audit transparency. */}
-        {sealed && "●●●●●●"}
-        {!sealed && row.status === "verified" && "●●●●●●"}
-        {!sealed && row.status === "rejected" && `●●●●●● → ${row.vendor}`}
+    <div className={rowClassName} title={row.rejectDetail ?? undefined}>
+      <div className="feed-row-top">
+        <span className="feed-row-agent">
+          {row.agentName}
+          {/* Vendor is only ever revealed for a rejected payment -- it never
+              actually spent anything, so naming it is audit-useful rather
+              than a confidentiality leak. A settled payment's vendor stays
+              sealed along with the amount, matching the project's core
+              privacy guarantee. */}
+          {!sealed && row.status === "rejected" && <span className="arrow-vendor"> → {row.vendor}</span>}
+        </span>
+        {/* Amount is never shown in the UI, pass or fail. */}
+        <span className="sealed feed-row-amount">●●●●●●</span>
       </div>
-      <div className="mono" style={{ fontSize: 11, color: "var(--text-dim)" }}>
-        {!sealed && row.explorerUrl && (
-          <a href={row.explorerUrl} target="_blank" rel="noreferrer" style={{ color: "inherit" }}>
-            tx {row.txHash?.slice(0, 10)}… ↗
-          </a>
-        )}
-        {!sealed && !row.explorerUrl && row.status === "rejected" && "no tx (rejected pre-chain)"}
-      </div>
-      <div className={`status-tag ${sealed ? "pending" : row.status}`}>
-        {sealed && "⏳ verifying..."}
-        {!sealed && row.status === "verified" && "✓ Policy proof verified on-chain"}
-        {!sealed && row.status === "rejected" && rejectLabel(row.rejectReason)}
+      <div className="feed-row-bottom">
+        <span key={row.phase} className={`status-tag ${statusClass}`}>
+          {sealed && "⏳ verifying..."}
+          {!sealed && row.status === "verified" && (
+            <>
+              ✓ Policy proof verified on-chain
+              {row.explorerUrl && (
+                <a href={row.explorerUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                  view tx →
+                </a>
+              )}
+            </>
+          )}
+          {!sealed && row.status === "rejected" && <>✗ Proof rejected — {rejectLabel(row.rejectReason)}</>}
+        </span>
+        <span className="feed-row-time">{relativeTime(row.timestamp, now)}</span>
       </div>
     </div>
   );
 }
 
 function rejectLabel(reason?: PaymentEvent["rejectReason"]) {
-  if (reason === "over_cap") return "✗ Proof rejected — over per-tx cap (treasury-wide)";
-  if (reason === "vendor_not_allowlisted") return "✗ Proof rejected — vendor not allow-listed";
-  return "✗ Proof rejected";
+  if (reason === "over_cap") return "over per-tx cap";
+  if (reason === "vendor_not_allowlisted") return "vendor not in allow-list";
+  return "policy violation";
 }
+
+function relativeTime(iso: string, now: number): string {
+  const diffMs = Math.max(0, now - new Date(iso).getTime());
+  const s = Math.floor(diffMs / 1000);
+  if (s < 5) return "just now";
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ago`;
+}
+
+/** Re-renders every `intervalMs` so relative timestamps ("12s ago") stay fresh. */
+function useTicker(intervalMs: number): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
