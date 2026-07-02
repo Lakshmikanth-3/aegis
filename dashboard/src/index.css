@@ -15,8 +15,18 @@
   --accent: #2fe6a0;
   --accent-soft: #2fe6a022;
   --accent-2: #7c5cff;
+  --accent-2-soft: #7c5cff22;
   --danger: #ff5d5d;
   --pending: #5d7bff;
+  --pending-soft: #5d7bff1f;
+  --role-teal: #2dd4bf;
+  --role-teal-soft: #2dd4bf1f;
+  --role-amber: #f5a623;
+  --role-amber-soft: #f5a6231f;
+  --on-accent: #06140e;
+  --hero-bg: #0a0e1a;
+  --backdrop: #000000a0;
+  --shadow-strong: #000000cc;
   --radius: 14px;
   --glow: 0 0 0 1px var(--panel-border-soft), 0 8px 30px -10px #00000080;
 }

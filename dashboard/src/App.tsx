@@ -75,7 +75,7 @@ function AppShell() {
           </a>
         )}
       </div>
-      <div className="content">
+      <div className="content" key={location.pathname}>
         {status && !status.ready ? <BootstrapGate status={status} /> : <Outlet />}
       </div>
     </div>

@@ -40,7 +40,7 @@
   font-family: var(--display);
   font-weight: 700;
   font-size: 14px;
-  color: #06140e;
+  color: var(--on-accent);
   flex-shrink: 0;
 }
 
@@ -86,7 +86,7 @@
 }
 
 .tab.active {
-  color: #06140e;
+  color: var(--on-accent);
   background: var(--accent);
 }
 
@@ -120,6 +120,16 @@
   margin: 0 auto;
   position: relative;
   z-index: 1;
+  animation: route-fade 200ms ease-out;
+}
+
+@keyframes route-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .panel {
@@ -183,7 +193,7 @@
 button.primary,
 a.primary {
   background: var(--accent);
-  color: #06140e;
+  color: var(--on-accent);
   border: none;
   padding: 10px 18px;
   border-radius: 8px;
@@ -257,24 +267,24 @@ button.primary:disabled {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 12px 0;
-  border-top: 1px solid var(--panel-border-soft);
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--bg);
+  margin-bottom: 8px;
+  transition: border-color 0.15s;
 }
 
-.agent-row:first-of-type {
-  border-top: none;
+.agent-row:last-of-type {
+  margin-bottom: 0;
 }
 
 .agent-row.clickable {
   cursor: pointer;
-  transition: background 0.15s;
-  border-radius: 8px;
-  margin: 0 -10px;
-  padding: 12px 10px;
 }
 
 .agent-row.clickable:hover {
-  background: #ffffff06;
+  border-color: var(--pending);
 }
 
 .agent-name {
@@ -283,6 +293,18 @@ button.primary:disabled {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.agent-row-chevron {
+  color: var(--text-faint);
+  font-size: 15px;
+  flex-shrink: 0;
+  transition: color 0.15s, transform 0.15s;
+}
+
+.agent-row.clickable:hover .agent-row-chevron {
+  color: var(--pending);
+  transform: translateX(2px);
 }
 
 .role-badge-inline {
@@ -294,6 +316,48 @@ button.primary:disabled {
   background: var(--accent-soft);
   border-radius: 999px;
   padding: 2px 8px;
+  flex-shrink: 0;
+}
+
+/* Role badge colors, shared by .role-badge (drawer) and .role-badge-inline
+   (console row) -- Procurement/DevOps/Analytics/Marketing/Compliance each
+   get a distinct color so the role reads at a glance. Compound selectors
+   (not bare .role-procurement etc.) so these reliably beat the base
+   .role-badge/.role-badge-inline color regardless of source order. */
+.role-badge.role-procurement,
+.role-badge-inline.role-procurement {
+  color: var(--pending);
+  background: var(--pending-soft);
+}
+
+.role-badge.role-devops,
+.role-badge-inline.role-devops {
+  color: var(--role-teal);
+  background: var(--role-teal-soft);
+}
+
+.role-badge.role-analytics,
+.role-badge-inline.role-analytics {
+  color: var(--accent-2);
+  background: var(--accent-2-soft);
+}
+
+.role-badge.role-marketing,
+.role-badge-inline.role-marketing {
+  color: var(--role-amber);
+  background: var(--role-amber-soft);
+}
+
+.role-badge.role-compliance,
+.role-badge-inline.role-compliance {
+  color: var(--text-dim);
+  background: #ffffff10;
+}
+
+.role-badge.role-default,
+.role-badge-inline.role-default {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .budget-bar-track {
@@ -350,26 +414,60 @@ button.primary:disabled {
 }
 
 .feed-row {
-  display: grid;
-  grid-template-columns: 140px 1fr 1fr 180px;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 12px;
   border: 1px solid var(--panel-border);
+  border-left: 3px solid var(--text-faint);
   background: var(--bg);
   font-family: var(--mono);
   font-size: 13px;
-  animation: arrive 0.3s ease-out;
+  animation: slide-in-right 220ms ease-out;
+  transition: border-left-color 150ms ease, background 150ms ease;
+}
+
+.feed-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.feed-row-agent {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.feed-row-agent .arrow-vendor {
+  color: var(--text-dim);
+  font-family: var(--mono);
+}
+
+.feed-row-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 20px;
+}
+
+.feed-row-time {
+  font-size: 11px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .feed-row.verified {
-  border-left: 3px solid var(--accent);
+  border-left-color: var(--accent);
   box-shadow: -1px 0 16px -8px var(--accent);
 }
 
 .feed-row.rejected {
-  border-left: 3px solid var(--danger);
+  border-left-color: var(--danger);
   background: rgba(255, 93, 93, 0.06);
 }
 
@@ -379,29 +477,98 @@ button.primary:disabled {
 }
 
 .status-tag {
-  text-align: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+  animation: badge-fade-in 300ms ease-out;
 }
 
 .status-tag.verified {
   color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .status-tag.rejected {
   color: var(--danger);
+  background: rgba(255, 93, 93, 0.14);
 }
 
 .status-tag.pending {
   color: var(--pending);
+  background: rgba(93, 123, 255, 0.12);
 }
 
-@keyframes arrive {
+.status-tag a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  opacity: 0.8;
+}
+
+.status-tag a:hover {
+  opacity: 1;
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--danger);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.live-dot-red {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 8px var(--danger);
+  animation: pulse-dot-live 1.2s ease-in-out infinite;
+}
+
+.feed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+@keyframes slide-in-right {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateX(24px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateX(0);
+  }
+}
+
+@keyframes badge-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-dot-live {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
   }
 }
 
@@ -425,7 +592,7 @@ button.primary:disabled {
 .drawer-backdrop {
   position: fixed;
   inset: 0;
-  background: #000000a0;
+  background: var(--backdrop);
   backdrop-filter: blur(2px);
   z-index: 50;
   display: flex;
@@ -442,6 +609,50 @@ button.primary:disabled {
   border-left: 1px solid var(--panel-border);
   padding: 32px 28px;
   position: relative;
+  animation: drawer-slide-in 250ms ease-out;
+}
+
+@keyframes drawer-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.drawer-agent-id {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.copy-btn {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.copy-btn:hover {
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+
+.copy-btn.copied {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.stat-caption {
+  font-size: 10px;
+  color: var(--text-faint);
+  margin-top: 2px;
 }
 
 .drawer-close {
@@ -585,10 +796,43 @@ button.primary:disabled {
   font-size: 13px;
   word-break: break-all;
   color: var(--text);
+  opacity: 1;
+  transition: opacity 200ms ease;
+}
+
+.root-box-value.fading {
+  opacity: 0;
+}
+
+.root-box-updated-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 3px 9px;
+  white-space: nowrap;
+  animation: updated-badge-life 2000ms ease forwards;
+}
+
+@keyframes updated-badge-life {
+  0% {
+    opacity: 0;
+  }
+  10%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 .root-box-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-shrink: 0;
 }
@@ -625,15 +869,24 @@ button.ghost.danger:hover {
 .vendor-card {
   background: var(--bg);
   border: 1px solid var(--panel-border);
+  border-left: 3px solid var(--danger);
   border-radius: var(--radius);
   padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  transition: border-left-color 0.3s, border-color 0.15s;
+  animation: card-pop-in 250ms ease-out;
 }
 
 .vendor-card.active {
-  border-color: var(--panel-border);
+  border-left-color: var(--accent);
+}
+
+.vendor-card:hover {
+  border-top-color: var(--pending);
+  border-right-color: var(--pending);
+  border-bottom-color: var(--pending);
 }
 
 .vendor-card-header {
@@ -645,40 +898,118 @@ button.ghost.danger:hover {
 
 .vendor-card-name {
   font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .vendor-card-desc {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-dim);
   line-height: 1.5;
   flex: 1;
 }
 
-.badge-green {
-  font-size: 10px;
+.vendor-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vendor-card-footer-label {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+@keyframes card-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Toggle switch used on vendor cards */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: var(--panel-border);
+  border-radius: 999px;
+  transition: background-color 0.2s;
+}
+
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  left: 3px;
+  top: 3px;
+  background: var(--text);
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--accent);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(16px);
+  background: var(--on-accent);
+}
+
+.toggle-switch input:disabled + .toggle-slider {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.badge-green,
+.badge-grey,
+.badge-red {
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  border-radius: 20px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  display: inline-block;
+  animation: badge-fade-in 300ms ease-out;
+}
+
+.badge-green {
   color: var(--accent);
   background: var(--accent-soft);
-  border-radius: 999px;
-  padding: 3px 9px;
-  white-space: nowrap;
 }
 
 .badge-grey {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   color: var(--text-faint);
   background: #ffffff0a;
-  border-radius: 999px;
-  padding: 3px 9px;
-  white-space: nowrap;
+}
+
+.badge-red {
+  color: var(--danger);
+  background: rgba(255, 93, 93, 0.14);
 }
 
 .add-vendor-row {
@@ -723,7 +1054,7 @@ button.ghost.danger:hover {
   border-radius: 10px;
   font-size: 13.5px;
   font-family: var(--mono);
-  box-shadow: 0 12px 40px -12px #000000cc;
+  box-shadow: 0 12px 40px -12px var(--shadow-strong);
   z-index: 60;
   animation: fade-up 0.25s ease-out;
 }
@@ -762,7 +1093,7 @@ button.ghost.danger:hover {
 }
 
 .period-option.active {
-  color: #06140e;
+  color: var(--on-accent);
   background: var(--accent);
 }
 
@@ -770,6 +1101,40 @@ button.ghost.danger:hover {
   display: flex;
   gap: 28px;
   align-items: flex-start;
+  animation: attestation-rise 300ms ease-out;
+}
+
+@keyframes attestation-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.verify-toggle {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.verify-toggle:hover {
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+
+.verify-command-wrap {
+  margin-top: 14px;
+  animation: badge-fade-in 250ms ease-out;
 }
 
 .attestation-card-body {
@@ -848,4 +1213,79 @@ button.ghost.danger:hover {
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+@media (max-width: 480px) {
+  .content {
+    padding: 16px;
+  }
+
+  .topbar {
+    padding: 12px 16px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .brand-tag {
+    display: none;
+  }
+
+  .contract-pill {
+    display: none;
+  }
+
+  .tabs {
+    margin-left: 0;
+    width: 100%;
+    order: 3;
+    overflow-x: auto;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    padding: 8px 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .agent-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .agent-name {
+    width: auto;
+  }
+
+  .budget-label {
+    width: auto;
+    text-align: left;
+  }
+
+  .agent-row > .agent-row-chevron {
+    display: none;
+  }
+
+  .vendor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .attestation-card {
+    flex-direction: column;
+  }
+
+  .attestation-qr {
+    align-self: center;
+  }
+
+  .feed-row-top,
+  .feed-row-bottom {
+    flex-wrap: wrap;
+  }
 }
